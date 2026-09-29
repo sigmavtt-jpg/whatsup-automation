@@ -14,8 +14,8 @@ android {
         applicationId = "com.whatsup.automation"
         minSdk = 26
         targetSdk = 35
-        versionCode = 7
-        versionName = "7.4"
+        versionCode = 8
+        versionName = "7.4.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         ndk {
