@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">WhatsUp v7.1</string>
+    <string name="accessibility_service_description">خدمة مساعدة أتمتة واتساب لقراءة الإشعارات والتحقق التلقائي من الرسائل محلياً على الجهاز.</string>
+</resources>

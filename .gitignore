@@ -1,0 +1,80 @@
+# ============================================================
+# .gitignore — WhatsUp Automation
+# يحجب كل الملفات غير الضرورية عن الأدوات والوكلاء
+# ============================================================
+
+# ─── Build Outputs ───────────────────────────────────────────
+/build/
+app/build/
+**/build/
+*.apk
+*.aab
+*.aar
+*.class
+*.dex
+*.ap_
+
+# ─── Node.js Binaries & Native Libs ─────────────────────────
+/bin/
+/.cache/
+/include/
+*.so
+*.node
+*.dylib
+*.dll
+
+# ─── Node Modules ────────────────────────────────────────────
+node_modules/
+.npm/
+.yarn/
+.pnp.*
+yarn.lock
+
+# ─── Gradle ──────────────────────────────────────────────────
+.gradle/
+gradle/wrapper/gradle-wrapper.jar
+local.properties
+*.local.properties
+
+# ─── IDE & OS ────────────────────────────────────────────────
+.idea/
+*.iml
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.swo
+*~
+
+# ─── Logs & Temp ─────────────────────────────────────────────
+*.log
+logcat.txt
+screen*.png
+/errors/
+/tmp/
+/temp/
+*.tmp
+*.bak
+
+# ─── Security ────────────────────────────────────────────────
+*.keystore
+*.jks
+google-services.json
+local.properties
+
+# ─── Large Archive Files ─────────────────────────────────────
+*.zip
+*.tar
+*.tar.gz
+*.gz
+*.rar
+*.7z
+
+# ─── Test & Coverage Reports ─────────────────────────────────
+/reports/
+/jacoco/
+*.exec
+
+# ─── Docs يُحجب عن الأدوات (موجودة في .docs/) ───────────────
+/.docs/

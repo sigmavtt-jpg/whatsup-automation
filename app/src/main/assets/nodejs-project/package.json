@@ -1,0 +1,25 @@
+{
+  "name": "whatsup-local-baileys",
+  "version": "2.0.0",
+  "description": "WhatsApp Baileys engine running fully locally on Android",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "build": "node build_bundle.cjs",
+    "test": "node test_modules.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.9",
+    "pino": "^9.5.0",
+    "qrcode-terminal": "^0.12.0"
+  },
+  "keywords": [
+    "whatsapp",
+    "automation",
+    "baileys",
+    "android",
+    "local-engine"
+  ],
+  "author": "WhatsUp Automation Team",
+  "license": "MIT"
+}

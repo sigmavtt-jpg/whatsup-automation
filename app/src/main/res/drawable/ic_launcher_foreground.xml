@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Chat bubble glow / aura -->
+    <path
+        android:fillColor="#3325D366"
+        android:pathData="M54,28 C39.64,28 28,39.64 28,54 C28,59.2 29.54,64.04 32.18,68.1 L28,80 L40.35,75.95 C44.27,78.46 48.94,80 54,80 C68.36,80 80,68.36 80,54 C80,39.64 68.36,28 54,28 Z" />
+
+    <!-- Chat bubble main body -->
+    <path
+        android:pathData="M54,30 C40.75,30 30,40.75 30,54 C30,58.8 31.42,63.26 33.86,67 L30,78 L41.4,74.26 C45.02,76.58 49.33,78 54,78 C67.25,78 78,67.25 78,54 C78,40.75 67.25,30 54,30 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="30"
+                android:startY="30"
+                android:endX="78"
+                android:endY="78"
+                android:type="linear">
+                <item android:color="#25D366" android:offset="0.0" />
+                <item android:color="#00A884" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Chat bubble inner dark backdrop -->
+    <path
+        android:fillColor="#091410"
+        android:pathData="M54,34 C42.95,34 34,42.95 34,54 C34,57.97 35.17,61.66 37.18,64.76 L34,74 L43.55,70.94 C46.55,72.84 50.13,74 54,74 C65.05,74 74,65.05 74,54 C74,42.95 65.05,34 54,34 Z" />
+
+    <!-- Automation Lightning Bolt in glowing cyan/emerald -->
+    <path
+        android:pathData="M56,39 L44,55 L53,55 L50,69 L64,52 L55,52 L56,39 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="44"
+                android:startY="39"
+                android:endX="64"
+                android:endY="69"
+                android:type="linear">
+                <item android:color="#00F2FE" android:offset="0.0" />
+                <item android:color="#25D366" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Tech accents -->
+    <path
+        android:fillColor="#00F2FE"
+        android:pathData="M42,44 A2,2 0 1,1 41.99,44" />
+    <path
+        android:fillColor="#25D366"
+        android:pathData="M66,63 A2,2 0 1,1 65.99,63" />
+</vector>
