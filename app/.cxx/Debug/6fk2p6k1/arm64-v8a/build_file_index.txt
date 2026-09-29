@@ -1,1 +1,0 @@
-C:\Users\sO377\Downloads\whatsup\app\src\main\cpp\CMakeLists.txt

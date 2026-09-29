@@ -5876,10 +5876,10 @@ var require_reach = __commonJS({
       }
       const isChainArray = Array.isArray(chain);
       Assert(!isChainArray || !options.separator, "Separator option is not valid for array-based chain");
-      const path3 = isChainArray ? chain : chain.split(options.separator || ".");
+      const path4 = isChainArray ? chain : chain.split(options.separator || ".");
       let ref = obj;
-      for (let i = 0; i < path3.length; ++i) {
-        let key = path3[i];
+      for (let i = 0; i < path4.length; ++i) {
+        let key = path4[i];
         const type = options.iterables && internals.iterables(ref);
         if (Array.isArray(ref) || type === "set") {
           const number2 = Number(key);
@@ -5889,7 +5889,7 @@ var require_reach = __commonJS({
         }
         if (!ref || typeof ref === "function" && options.functions === false || // Defaults to true
         !type && ref[key] === void 0) {
-          Assert(!options.strict || i + 1 === path3.length, "Missing segment", key, "in reach path ", chain);
+          Assert(!options.strict || i + 1 === path4.length, "Missing segment", key, "in reach path ", chain);
           Assert(typeof ref === "object" || options.functions === true || typeof ref !== "function", "Invalid segment", key, "in reach path ", chain);
           ref = options.default;
           break;
@@ -6206,8 +6206,8 @@ var require_applyToDefaults = __commonJS({
       const nullOverride = options.nullOverride !== void 0 ? options.nullOverride : false;
       return Merge(copy, source, { nullOverride, mergeArrays: false });
     };
-    internals.reachCopy = function(dst, src, path3) {
-      for (const segment of path3) {
+    internals.reachCopy = function(dst, src, path4) {
+      for (const segment of path4) {
         if (!(segment in src)) {
           return;
         }
@@ -6219,14 +6219,14 @@ var require_applyToDefaults = __commonJS({
       }
       const value = src;
       let ref = dst;
-      for (let i = 0; i < path3.length - 1; ++i) {
-        const segment = path3[i];
+      for (let i = 0; i < path4.length - 1; ++i) {
+        const segment = path4[i];
         if (typeof ref[segment] !== "object") {
           ref[segment] = {};
         }
         ref = ref[segment];
       }
-      ref[path3[path3.length - 1]] = value;
+      ref[path4[path4.length - 1]] = value;
     };
   }
 });
@@ -16099,11 +16099,11 @@ var require_mime_types = __commonJS({
       }
       return exts[0];
     }
-    function lookup(path3) {
-      if (!path3 || typeof path3 !== "string") {
+    function lookup(path4) {
+      if (!path4 || typeof path4 !== "string") {
         return false;
       }
-      var extension3 = extname("x." + path3).toLowerCase().substr(1);
+      var extension3 = extname("x." + path4).toLowerCase().substr(1);
       if (!extension3) {
         return false;
       }
@@ -17208,11 +17208,11 @@ var require_form_data = __commonJS({
     "use strict";
     var CombinedStream = require_combined_stream();
     var util5 = require("util");
-    var path3 = require("path");
+    var path4 = require("path");
     var http3 = require("http");
     var https2 = require("https");
     var parseUrl2 = require("url").parse;
-    var fs6 = require("fs");
+    var fs7 = require("fs");
     var Stream = require("stream").Stream;
     var crypto3 = require("crypto");
     var mime = require_mime_types();
@@ -17282,7 +17282,7 @@ var require_form_data = __commonJS({
         if (value.end != void 0 && value.end != Infinity && value.start != void 0) {
           callback(null, value.end + 1 - (value.start ? value.start : 0));
         } else {
-          fs6.stat(value.path, function(err, stat2) {
+          fs7.stat(value.path, function(err, stat2) {
             if (err) {
               callback(err);
               return;
@@ -17339,11 +17339,11 @@ var require_form_data = __commonJS({
     FormData3.prototype._getContentDisposition = function(value, options) {
       var filename;
       if (typeof options.filepath === "string") {
-        filename = path3.normalize(options.filepath).replace(/\\/g, "/");
+        filename = path4.normalize(options.filepath).replace(/\\/g, "/");
       } else if (options.filename || value && (value.name || value.path)) {
-        filename = path3.basename(options.filename || value && (value.name || value.path));
+        filename = path4.basename(options.filename || value && (value.name || value.path));
       } else if (value && value.readable && hasOwn(value, "httpVersion")) {
-        filename = path3.basename(value.client._httpMessage.path || "");
+        filename = path4.basename(value.client._httpMessage.path || "");
       }
       if (filename) {
         return 'filename="' + escapeHeaderParam(filename) + '"';
@@ -19240,27 +19240,27 @@ var require_process = __commonJS({
 var require_filesystem = __commonJS({
   "node_modules/detect-libc/lib/filesystem.js"(exports2, module2) {
     "use strict";
-    var fs6 = require("fs");
+    var fs7 = require("fs");
     var LDD_PATH = "/usr/bin/ldd";
     var SELF_PATH = "/proc/self/exe";
     var MAX_LENGTH = 2048;
-    var readFileSync = (path3) => {
-      const fd = fs6.openSync(path3, "r");
+    var readFileSync = (path4) => {
+      const fd = fs7.openSync(path4, "r");
       const buffer2 = Buffer.alloc(MAX_LENGTH);
-      const bytesRead = fs6.readSync(fd, buffer2, 0, MAX_LENGTH, 0);
-      fs6.close(fd, () => {
+      const bytesRead = fs7.readSync(fd, buffer2, 0, MAX_LENGTH, 0);
+      fs7.close(fd, () => {
       });
       return buffer2.subarray(0, bytesRead);
     };
-    var readFile2 = (path3) => new Promise((resolve, reject) => {
-      fs6.open(path3, "r", (err, fd) => {
+    var readFile2 = (path4) => new Promise((resolve, reject) => {
+      fs7.open(path4, "r", (err, fd) => {
         if (err) {
           reject(err);
         } else {
           const buffer2 = Buffer.alloc(MAX_LENGTH);
-          fs6.read(fd, buffer2, 0, MAX_LENGTH, 0, (_, bytesRead) => {
+          fs7.read(fd, buffer2, 0, MAX_LENGTH, 0, (_, bytesRead) => {
             resolve(buffer2.subarray(0, bytesRead));
-            fs6.close(fd, () => {
+            fs7.close(fd, () => {
             });
           });
         }
@@ -19372,11 +19372,11 @@ var require_detect_libc = __commonJS({
       }
       return null;
     };
-    var familyFromInterpreterPath = (path3) => {
-      if (path3) {
-        if (path3.includes("/ld-musl-")) {
+    var familyFromInterpreterPath = (path4) => {
+      if (path4) {
+        if (path4.includes("/ld-musl-")) {
           return MUSL;
-        } else if (path3.includes("/ld-linux-")) {
+        } else if (path4.includes("/ld-linux-")) {
           return GLIBC;
         }
       }
@@ -19423,8 +19423,8 @@ var require_detect_libc = __commonJS({
       cachedFamilyInterpreter = null;
       try {
         const selfContent = await readFile2(SELF_PATH);
-        const path3 = interpreterPath(selfContent);
-        cachedFamilyInterpreter = familyFromInterpreterPath(path3);
+        const path4 = interpreterPath(selfContent);
+        cachedFamilyInterpreter = familyFromInterpreterPath(path4);
       } catch (e) {
       }
       return cachedFamilyInterpreter;
@@ -19436,8 +19436,8 @@ var require_detect_libc = __commonJS({
       cachedFamilyInterpreter = null;
       try {
         const selfContent = readFileSync(SELF_PATH);
-        const path3 = interpreterPath(selfContent);
-        cachedFamilyInterpreter = familyFromInterpreterPath(path3);
+        const path4 = interpreterPath(selfContent);
+        cachedFamilyInterpreter = familyFromInterpreterPath(path4);
       } catch (e) {
       }
       return cachedFamilyInterpreter;
@@ -24981,15 +24981,15 @@ var require_color = __commonJS({
       };
     }
     function wrapConversion(toModel, graph) {
-      const path3 = [graph[toModel].parent, toModel];
+      const path4 = [graph[toModel].parent, toModel];
       let fn2 = conversions_default[graph[toModel].parent][toModel];
       let cur = graph[toModel].parent;
       while (graph[cur].parent) {
-        path3.unshift(graph[cur].parent);
+        path4.unshift(graph[cur].parent);
         fn2 = link(conversions_default[graph[cur].parent][cur], fn2);
         cur = graph[cur].parent;
       }
-      fn2.conversion = path3;
+      fn2.conversion = path4;
       return fn2;
     }
     function route(fromModel) {
@@ -37441,11 +37441,11 @@ function linkParents(element) {
   return element;
 }
 function getElementPath(element) {
-  let path3 = "";
+  let path4 = "";
   if (element.parent && element.parent.name !== "dtd") {
-    path3 += `${getElementPath(element.parent)}/`;
+    path4 += `${getElementPath(element.parent)}/`;
   }
-  return path3 + element.name;
+  return path4 + element.name;
 }
 var import_debug14, debug14, EbmlContentError, ParseAction, EbmlIterator;
 var init_EbmlIterator = __esm({
@@ -40968,8 +40968,8 @@ var require_req = __commonJS({
       if (req.originalUrl) {
         _req.url = req.originalUrl;
       } else {
-        const path3 = req.path;
-        _req.url = typeof path3 === "string" ? path3 : req.url ? req.url.path || req.url : void 0;
+        const path4 = req.path;
+        _req.url = typeof path4 === "string" ? path4 : req.url ? req.url.path || req.url : void 0;
       }
       if (req.query) {
         _req.query = req.query;
@@ -41134,14 +41134,14 @@ var require_redact = __commonJS({
       }
       return obj;
     }
-    function parsePath(path3) {
+    function parsePath(path4) {
       const parts = [];
       let current = "";
       let inBrackets = false;
       let inQuotes = false;
       let quoteChar = "";
-      for (let i = 0; i < path3.length; i++) {
-        const char = path3[i];
+      for (let i = 0; i < path4.length; i++) {
+        const char = path4[i];
         if (!inBrackets && char === ".") {
           if (current) {
             parts.push(current);
@@ -41272,10 +41272,10 @@ var require_redact = __commonJS({
       return current;
     }
     function redactPaths(obj, paths, censor, remove = false) {
-      for (const path3 of paths) {
-        const parts = parsePath(path3);
+      for (const path4 of paths) {
+        const parts = parsePath(path4);
         if (parts.includes("*")) {
-          redactWildcardPath(obj, parts, censor, path3, remove);
+          redactWildcardPath(obj, parts, censor, path4, remove);
         } else {
           if (remove) {
             removeKey(obj, parts);
@@ -41360,8 +41360,8 @@ var require_redact = __commonJS({
           }
         } else {
           if (afterWildcard.includes("*")) {
-            const wrappedCensor = typeof censor === "function" ? (value, path3) => {
-              const fullPath = [...pathArray.slice(0, pathLength), ...path3];
+            const wrappedCensor = typeof censor === "function" ? (value, path4) => {
+              const fullPath = [...pathArray.slice(0, pathLength), ...path4];
               return censor(value, fullPath);
             } : censor;
             redactWildcardPath(current, afterWildcard, wrappedCensor, originalPath, remove);
@@ -41396,8 +41396,8 @@ var require_redact = __commonJS({
         return null;
       }
       const pathStructure = /* @__PURE__ */ new Map();
-      for (const path3 of pathsToClone) {
-        const parts = parsePath(path3);
+      for (const path4 of pathsToClone) {
+        const parts = parsePath(path4);
         let current = pathStructure;
         for (let i = 0; i < parts.length; i++) {
           const part = parts[i];
@@ -41449,24 +41449,24 @@ var require_redact = __commonJS({
       }
       return cloneSelectively(obj, pathStructure);
     }
-    function validatePath(path3) {
-      if (typeof path3 !== "string") {
+    function validatePath(path4) {
+      if (typeof path4 !== "string") {
         throw new Error("Paths must be (non-empty) strings");
       }
-      if (path3 === "") {
+      if (path4 === "") {
         throw new Error("Invalid redaction path ()");
       }
-      if (path3.includes("..")) {
-        throw new Error(`Invalid redaction path (${path3})`);
+      if (path4.includes("..")) {
+        throw new Error(`Invalid redaction path (${path4})`);
       }
-      if (path3.includes(",")) {
-        throw new Error(`Invalid redaction path (${path3})`);
+      if (path4.includes(",")) {
+        throw new Error(`Invalid redaction path (${path4})`);
       }
       let bracketCount = 0;
       let inQuotes = false;
       let quoteChar = "";
-      for (let i = 0; i < path3.length; i++) {
-        const char = path3[i];
+      for (let i = 0; i < path4.length; i++) {
+        const char = path4[i];
         if ((char === '"' || char === "'") && bracketCount > 0) {
           if (!inQuotes) {
             inQuotes = true;
@@ -41480,20 +41480,20 @@ var require_redact = __commonJS({
         } else if (char === "]" && !inQuotes) {
           bracketCount--;
           if (bracketCount < 0) {
-            throw new Error(`Invalid redaction path (${path3})`);
+            throw new Error(`Invalid redaction path (${path4})`);
           }
         }
       }
       if (bracketCount !== 0) {
-        throw new Error(`Invalid redaction path (${path3})`);
+        throw new Error(`Invalid redaction path (${path4})`);
       }
     }
     function validatePaths(paths) {
       if (!Array.isArray(paths)) {
         throw new TypeError("paths must be an array");
       }
-      for (const path3 of paths) {
-        validatePath(path3);
+      for (const path4 of paths) {
+        validatePath(path4);
       }
     }
     function slowRedact(options = {}) {
@@ -41661,8 +41661,8 @@ var require_redaction = __commonJS({
         if (shape[k] === null) {
           o2[k] = (value) => topCensor(value, [k]);
         } else {
-          const wrappedCensor = typeof censor === "function" ? (value, path3) => {
-            return censor(value, [k, ...path3]);
+          const wrappedCensor = typeof censor === "function" ? (value, path4) => {
+            return censor(value, [k, ...path4]);
           } : censor;
           o2[k] = Redact({
             paths: shape[k],
@@ -41880,10 +41880,10 @@ var require_atomic_sleep = __commonJS({
 var require_sonic_boom = __commonJS({
   "node_modules/sonic-boom/index.js"(exports2, module2) {
     "use strict";
-    var fs6 = require("fs");
+    var fs7 = require("fs");
     var EventEmitter4 = require("events");
     var inherits2 = require("util").inherits;
-    var path3 = require("path");
+    var path4 = require("path");
     var sleep = require_atomic_sleep();
     var assert = require("assert");
     var BUSY_WRITE_TIMEOUT = 100;
@@ -41937,20 +41937,20 @@ var require_sonic_boom = __commonJS({
       const mode = sonic.mode;
       if (sonic.sync) {
         try {
-          if (sonic.mkdir) fs6.mkdirSync(path3.dirname(file), { recursive: true });
-          const fd = fs6.openSync(file, flags, mode);
+          if (sonic.mkdir) fs7.mkdirSync(path4.dirname(file), { recursive: true });
+          const fd = fs7.openSync(file, flags, mode);
           fileOpened(null, fd);
         } catch (err) {
           fileOpened(err);
           throw err;
         }
       } else if (sonic.mkdir) {
-        fs6.mkdir(path3.dirname(file), { recursive: true }, (err) => {
+        fs7.mkdir(path4.dirname(file), { recursive: true }, (err) => {
           if (err) return fileOpened(err);
-          fs6.open(file, flags, mode, fileOpened);
+          fs7.open(file, flags, mode, fileOpened);
         });
       } else {
-        fs6.open(file, flags, mode, fileOpened);
+        fs7.open(file, flags, mode, fileOpened);
       }
     }
     function SonicBoom(opts) {
@@ -41991,8 +41991,8 @@ var require_sonic_boom = __commonJS({
         this.flush = flushBuffer;
         this.flushSync = flushBufferSync;
         this._actualWrite = actualWriteBuffer;
-        fsWriteSync = () => fs6.writeSync(this.fd, this._writingBuf);
-        fsWrite = () => fs6.write(this.fd, this._writingBuf, this.release);
+        fsWriteSync = () => fs7.writeSync(this.fd, this._writingBuf);
+        fsWrite = () => fs7.write(this.fd, this._writingBuf, this.release);
       } else if (contentMode === void 0 || contentMode === kContentModeUtf8) {
         this._writingBuf = "";
         this.write = write2;
@@ -42001,15 +42001,15 @@ var require_sonic_boom = __commonJS({
         this._actualWrite = actualWrite;
         fsWriteSync = () => {
           if (Buffer.isBuffer(this._writingBuf)) {
-            return fs6.writeSync(this.fd, this._writingBuf);
+            return fs7.writeSync(this.fd, this._writingBuf);
           }
-          return fs6.writeSync(this.fd, this._writingBuf, "utf8");
+          return fs7.writeSync(this.fd, this._writingBuf, "utf8");
         };
         fsWrite = () => {
           if (Buffer.isBuffer(this._writingBuf)) {
-            return fs6.write(this.fd, this._writingBuf, this.release);
+            return fs7.write(this.fd, this._writingBuf, this.release);
           }
-          return fs6.write(this.fd, this._writingBuf, "utf8", this.release);
+          return fs7.write(this.fd, this._writingBuf, "utf8", this.release);
         };
       } else {
         throw new Error(`SonicBoom supports "${kContentModeUtf8}" and "${kContentModeBuffer}", but passed ${contentMode}`);
@@ -42066,7 +42066,7 @@ var require_sonic_boom = __commonJS({
           }
         }
         if (this._fsync) {
-          fs6.fsyncSync(this.fd);
+          fs7.fsyncSync(this.fd);
         }
         const len = this._len;
         if (this._reopening) {
@@ -42180,7 +42180,7 @@ var require_sonic_boom = __commonJS({
       const onDrain = () => {
         if (!this._fsync) {
           try {
-            fs6.fsync(this.fd, (err) => {
+            fs7.fsync(this.fd, (err) => {
               this._flushPending = false;
               cb(err);
             });
@@ -42282,7 +42282,7 @@ var require_sonic_boom = __commonJS({
       const fd = this.fd;
       this.once("ready", () => {
         if (fd !== this.fd) {
-          fs6.close(fd, (err) => {
+          fs7.close(fd, (err) => {
             if (err) {
               return this.emit("error", err);
             }
@@ -42331,7 +42331,7 @@ var require_sonic_boom = __commonJS({
           buf = this._bufs[0];
         }
         try {
-          const n = Buffer.isBuffer(buf) ? fs6.writeSync(this.fd, buf) : fs6.writeSync(this.fd, buf, "utf8");
+          const n = Buffer.isBuffer(buf) ? fs7.writeSync(this.fd, buf) : fs7.writeSync(this.fd, buf, "utf8");
           const releasedBufObj = releaseWritingBuf(buf, this._len, n);
           buf = releasedBufObj.writingBuf;
           this._len = releasedBufObj.len;
@@ -42347,7 +42347,7 @@ var require_sonic_boom = __commonJS({
         }
       }
       try {
-        fs6.fsyncSync(this.fd);
+        fs7.fsyncSync(this.fd);
       } catch {
       }
     }
@@ -42368,7 +42368,7 @@ var require_sonic_boom = __commonJS({
           buf = mergeBuf(this._bufs[0], this._lens[0]);
         }
         try {
-          const n = fs6.writeSync(this.fd, buf);
+          const n = fs7.writeSync(this.fd, buf);
           buf = buf.subarray(n);
           this._len = Math.max(this._len - n, 0);
           if (buf.length <= 0) {
@@ -42396,13 +42396,13 @@ var require_sonic_boom = __commonJS({
       this._writingBuf = this._writingBuf.length ? this._writingBuf : this._bufs.shift() || "";
       if (this.sync) {
         try {
-          const written = Buffer.isBuffer(this._writingBuf) ? fs6.writeSync(this.fd, this._writingBuf) : fs6.writeSync(this.fd, this._writingBuf, "utf8");
+          const written = Buffer.isBuffer(this._writingBuf) ? fs7.writeSync(this.fd, this._writingBuf) : fs7.writeSync(this.fd, this._writingBuf, "utf8");
           release2(null, written);
         } catch (err) {
           release2(err);
         }
       } else {
-        fs6.write(this.fd, this._writingBuf, release2);
+        fs7.write(this.fd, this._writingBuf, release2);
       }
     }
     function actualWriteBuffer() {
@@ -42411,7 +42411,7 @@ var require_sonic_boom = __commonJS({
       this._writingBuf = this._writingBuf.length ? this._writingBuf : mergeBuf(this._bufs.shift(), this._lens.shift());
       if (this.sync) {
         try {
-          const written = fs6.writeSync(this.fd, this._writingBuf);
+          const written = fs7.writeSync(this.fd, this._writingBuf);
           release2(null, written);
         } catch (err) {
           release2(err);
@@ -42420,7 +42420,7 @@ var require_sonic_boom = __commonJS({
         if (kCopyBuffer) {
           this._writingBuf = Buffer.from(this._writingBuf);
         }
-        fs6.write(this.fd, this._writingBuf, release2);
+        fs7.write(this.fd, this._writingBuf, release2);
       }
     }
     function actualClose(sonic) {
@@ -42436,12 +42436,12 @@ var require_sonic_boom = __commonJS({
       sonic._lens = [];
       assert(typeof sonic.fd === "number", `sonic.fd must be a number, got ${typeof sonic.fd}`);
       try {
-        fs6.fsync(sonic.fd, closeWrapped);
+        fs7.fsync(sonic.fd, closeWrapped);
       } catch {
       }
       function closeWrapped() {
         if (sonic.fd !== 1 && sonic.fd !== 2) {
-          fs6.close(sonic.fd, done);
+          fs7.close(sonic.fd, done);
         } else {
           done();
         }
@@ -149960,9 +149960,9 @@ function isVisitable(thing) {
 function removeBrackets(key) {
   return utils_default.endsWith(key, "[]") ? key.slice(0, -2) : key;
 }
-function renderKey(path3, key, dots) {
-  if (!path3) return key;
-  return path3.concat(key).map(function each(token, i) {
+function renderKey(path4, key, dots) {
+  if (!path4) return key;
+  return path4.concat(key).map(function each(token, i) {
     token = removeBrackets(token);
     return !dots && i ? "[" + token + "]" : token;
   }).join(dots ? "." : "");
@@ -150043,13 +150043,13 @@ function toFormData(obj, formData, options) {
       return currentValue;
     });
   }
-  function defaultVisitor(value, key, path3) {
+  function defaultVisitor(value, key, path4) {
     let arr = value;
     if (utils_default.isReactNative(formData) && utils_default.isReactNativeBlob(value)) {
-      formData.append(renderKey(path3, key, dots), convertValue(value));
+      formData.append(renderKey(path4, key, dots), convertValue(value));
       return false;
     }
-    if (value && !path3 && typeof value === "object") {
+    if (value && !path4 && typeof value === "object") {
       if (utils_default.endsWith(key, "{}")) {
         key = metaTokens ? key : key.slice(0, -2);
         value = stringifyWithDepthLimit(value, 1);
@@ -150068,7 +150068,7 @@ function toFormData(obj, formData, options) {
     if (isVisitable(value)) {
       return true;
     }
-    formData.append(renderKey(path3, key, dots), convertValue(value));
+    formData.append(renderKey(path4, key, dots), convertValue(value));
     return false;
   }
   const exposedHelpers = Object.assign(predicates, {
@@ -150076,17 +150076,17 @@ function toFormData(obj, formData, options) {
     convertValue,
     isVisitable
   });
-  function build(value, path3, depth = 0) {
+  function build(value, path4, depth = 0) {
     if (utils_default.isUndefined(value)) return;
     throwIfMaxDepthExceeded(depth);
     if (stack.indexOf(value) !== -1) {
-      throw new Error("Circular reference detected in " + path3.join("."));
+      throw new Error("Circular reference detected in " + path4.join("."));
     }
     stack.push(value);
     utils_default.forEach(value, function each(el, key) {
-      const result = !(utils_default.isUndefined(el) || el === null) && visitor.call(formData, el, utils_default.isString(key) ? key.trim() : key, path3, exposedHelpers);
+      const result = !(utils_default.isUndefined(el) || el === null) && visitor.call(formData, el, utils_default.isString(key) ? key.trim() : key, path4, exposedHelpers);
       if (result === true) {
-        build(el, path3 ? path3.concat(key) : [key], depth + 1);
+        build(el, path4 ? path4.concat(key) : [key], depth + 1);
       }
     });
     stack.pop();
@@ -150371,7 +150371,7 @@ var platform_default = {
 // node_modules/axios/lib/helpers/toURLEncodedForm.js
 function toURLEncodedForm(data, options) {
   return toFormData_default(data, new platform_default.classes.URLSearchParams(), {
-    visitor: function(value, key, path3, helpers) {
+    visitor: function(value, key, path4, helpers) {
       if (platform_default.isNode && utils_default.isBuffer(value)) {
         this.append(key, value.toString("base64"));
         return false;
@@ -150393,14 +150393,14 @@ function throwIfDepthExceeded(index) {
   }
 }
 function parsePropPath(name) {
-  const path3 = [];
+  const path4 = [];
   const pattern = /[^.[\]]+|\[([^.[\]]*)]/g;
   let match;
   while ((match = pattern.exec(name)) !== null) {
-    throwIfDepthExceeded(path3.length);
-    path3.push(match[0] === "[]" ? "" : match[1] || match[0]);
+    throwIfDepthExceeded(path4.length);
+    path4.push(match[0] === "[]" ? "" : match[1] || match[0]);
   }
-  return path3;
+  return path4;
 }
 function arrayToObject(arr) {
   const obj = {};
@@ -150415,12 +150415,12 @@ function arrayToObject(arr) {
   return obj;
 }
 function formDataToJSON(formData) {
-  function buildPath(path3, value, target, index) {
+  function buildPath(path4, value, target, index) {
     throwIfDepthExceeded(index);
-    let name = path3[index++];
+    let name = path4[index++];
     if (name === "__proto__") return true;
     const isNumericKey = Number.isFinite(+name);
-    const isLast = index >= path3.length;
+    const isLast = index >= path4.length;
     name = !name && utils_default.isArray(target) ? target.length : name;
     if (isLast) {
       if (utils_default.hasOwnProp(target, name)) {
@@ -150433,7 +150433,7 @@ function formDataToJSON(formData) {
     if (!utils_default.hasOwnProp(target, name) || !utils_default.isObject(target[name])) {
       target[name] = [];
     }
-    const result = buildPath(path3, value, target[name], index);
+    const result = buildPath(path4, value, target[name], index);
     if (result && utils_default.isArray(target[name])) {
       target[name] = arrayToObject(target[name]);
     }
@@ -152337,9 +152337,9 @@ var http_default = isHttpAdapterSupported && function httpAdapter(config) {
       auth = urlUsername + ":" + urlPassword;
     }
     auth && headers.delete("authorization");
-    let path3;
+    let path4;
     try {
-      path3 = buildURL(
+      path4 = buildURL(
         parsed.pathname + parsed.search,
         own2("params"),
         own2("paramsSerializer")
@@ -152361,7 +152361,7 @@ var http_default = isHttpAdapterSupported && function httpAdapter(config) {
       http2Options = Object.assign(/* @__PURE__ */ Object.create(null), http2Options, { lookup });
     }
     const options = Object.assign(/* @__PURE__ */ Object.create(null), {
-      path: path3,
+      path: path4,
       method,
       headers: toByteStringHeaderObject(headers),
       agents: { http: httpAgent, https: httpsAgent },
@@ -152777,14 +152777,14 @@ var isURLSameOrigin_default = platform_default.hasStandardBrowserEnv ? /* @__PUR
 var cookies_default = platform_default.hasStandardBrowserEnv ? (
   // Standard browser envs support document.cookie
   {
-    write(name, value, expires, path3, domain, secure, sameSite) {
+    write(name, value, expires, path4, domain, secure, sameSite) {
       if (typeof document === "undefined") return;
       const cookie = [`${name}=${encodeURIComponent(value)}`];
       if (utils_default.isNumber(expires)) {
         cookie.push(`expires=${new Date(expires).toUTCString()}`);
       }
-      if (utils_default.isString(path3)) {
-        cookie.push(`path=${path3}`);
+      if (utils_default.isString(path4)) {
+        cookie.push(`path=${path4}`);
       }
       if (utils_default.isString(domain)) {
         cookie.push(`domain=${domain}`);
@@ -157004,8 +157004,8 @@ async function getMediaKeys(buffer2, mediaType) {
     macKey: expandedMediaKey.slice(48, 80)
   };
 }
-var extractVideoThumb = async (path3, destPath, time, size) => new Promise((resolve, reject) => {
-  const cmd = `ffmpeg -ss ${time} -i ${path3} -y -vf scale=${size.width}:-1 -vframes 1 -f image2 ${destPath}`;
+var extractVideoThumb = async (path4, destPath, time, size) => new Promise((resolve, reject) => {
+  const cmd = `ffmpeg -ss ${time} -i ${path4} -y -vf scale=${size.width}:-1 -vframes 1 -f image2 ${destPath}`;
   (0, import_child_process.exec)(cmd, (err) => {
     if (err) {
       reject(err);
@@ -162937,11 +162937,11 @@ var Mutex = class {
 var import_promises3 = require("fs/promises");
 var import_path3 = require("path");
 var fileLocks = /* @__PURE__ */ new Map();
-var getFileLock = (path3) => {
-  let mutex = fileLocks.get(path3);
+var getFileLock = (path4) => {
+  let mutex = fileLocks.get(path4);
   if (!mutex) {
     mutex = new Mutex();
-    fileLocks.set(path3, mutex);
+    fileLocks.set(path4, mutex);
   }
   return mutex;
 };
@@ -168474,8 +168474,18 @@ var makeMessagesSocket = (config) => {
           meId
         });
         const senderKeyJids = [];
+        const statusLidUsers = /* @__PURE__ */ new Set();
+        if (isStatus && statusJidList) {
+          for (const sJid of statusJidList) {
+            const decoded = jidDecode(sJid);
+            if (decoded && (sJid.includes("@lid") || decoded.server === "lid")) {
+              statusLidUsers.add(decoded.user);
+            }
+          }
+        }
         for (const { user: user2, device } of devices) {
-          const jid2 = jidEncode(user2, groupData?.addressingMode === "lid" ? "lid" : "s.whatsapp.net", device);
+          const serverForUser = isStatus && statusLidUsers.has(user2) ? "lid" : groupData?.addressingMode === "lid" ? "lid" : "s.whatsapp.net";
+          const jid2 = jidEncode(user2, serverForUser, device);
           if (!senderKeyMap[jid2] || !!participant) {
             senderKeyJids.push(jid2);
             senderKeyMap[jid2] = true;
@@ -170623,6 +170633,165 @@ function getLidForPhone(phone) {
 
 // status-manager.js
 var import_fs5 = __toESM(require("fs"), 1);
+
+// tracer.js
+var activeTraces = /* @__PURE__ */ new Map();
+function createTrace(statusId, initialData = {}) {
+  const traceId = `TRACE_${statusId.substring(0, 8)}_${Date.now()}`;
+  const trace = {
+    traceId,
+    statusId,
+    startTime: Date.now(),
+    stages: [],
+    data: { ...initialData },
+    completed: false
+  };
+  activeTraces.set(traceId, trace);
+  activeTraces.set(statusId, trace);
+  return trace;
+}
+function getTrace(idOrStatusId) {
+  return activeTraces.get(idOrStatusId) || null;
+}
+function recordStage(traceIdOrStatusId, stage, file, fn2, details = {}, status = "PASS", error = null) {
+  let trace = getTrace(traceIdOrStatusId);
+  if (!trace) {
+    const id = String(traceIdOrStatusId);
+    trace = createTrace(id, { note: "Auto-created in " + stage });
+  }
+  const now = Date.now();
+  const durationMs = now - trace.startTime;
+  const entry = {
+    timestamp: new Date(now).toISOString(),
+    traceId: trace.traceId,
+    statusId: trace.statusId,
+    stage,
+    file,
+    function: fn2,
+    status,
+    durationMs,
+    details: sanitizeDetails(details),
+    error: error ? error.message || String(error) : null,
+    stack: error?.stack ? error.stack.split("\n").slice(0, 3).join(" | ") : null
+  };
+  trace.stages.push(entry);
+  console.log(`[FORENSIC_TRACE] ${JSON.stringify(entry)}`);
+  return entry;
+}
+function sanitizeDetails(obj) {
+  if (!obj || typeof obj !== "object") return obj;
+  const sanitized = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (k.toLowerCase().includes("key") && typeof v === "object" && v !== null) {
+      sanitized[k] = {
+        remoteJid: v.remoteJid,
+        id: v.id,
+        participant: v.participant,
+        fromMe: v.fromMe
+      };
+    } else if (k.toLowerCase().includes("secret") || k.toLowerCase().includes("token") || k.toLowerCase().includes("password")) {
+      sanitized[k] = "[REDACTED]";
+    } else {
+      sanitized[k] = v;
+    }
+  }
+  return sanitized;
+}
+function attachSocketTraceHook(sock2) {
+  if (!sock2) return;
+  try {
+    if (sock2.ws && typeof sock2.ws.send === "function" && !sock2.ws._isTraceHooked) {
+      const originalSend = sock2.ws.send.bind(sock2.ws);
+      sock2.ws.send = function(data, ...args) {
+        try {
+          const dataLength = data ? data.length || data.byteLength || 0 : 0;
+          console.log(`[FORENSIC_TRACE] {"stage":"WEBSOCKET_FRAME_OUT","bytes":${dataLength},"timestamp":"${(/* @__PURE__ */ new Date()).toISOString()}"}`);
+        } catch (_) {
+        }
+        return originalSend(data, ...args);
+      };
+      sock2.ws._isTraceHooked = true;
+    }
+  } catch (_) {
+  }
+  try {
+    sock2.ev.on("message-receipt.update", (receipts) => {
+      for (const r of receipts || []) {
+        console.log(`[FORENSIC_TRACE] {"stage":"RECEIPT_UPDATE","keyId":"${r.key?.id}","type":"${r.receipt?.readTimestamp ? "READ" : "DELIVERY"}","timestamp":"${(/* @__PURE__ */ new Date()).toISOString()}"}`);
+      }
+    });
+    sock2.ev.on("messages.reaction", (reactions) => {
+      for (const r of reactions || []) {
+        console.log(`[FORENSIC_TRACE] {"stage":"REACTION_EVENT_RECV","keyId":"${r.key?.id}","text":"${r.reaction?.text}","timestamp":"${(/* @__PURE__ */ new Date()).toISOString()}"}`);
+      }
+    });
+  } catch (_) {
+  }
+}
+function printTimelineReport(traceIdOrStatusId) {
+  const trace = getTrace(traceIdOrStatusId);
+  if (!trace) return;
+  const stagesMap = /* @__PURE__ */ new Map();
+  for (const s of trace.stages) {
+    stagesMap.set(s.stage, s);
+  }
+  const order = [
+    ["01", "STATUS_RECEIVED"],
+    ["02", "STATUS_STORED"],
+    ["03", "KOTLIN_RECEIVED"],
+    ["04", "KOTLIN_COMMAND"],
+    ["05", "DISPATCHER"],
+    ["06", "REACTION_BUILD"],
+    ["07", "BAILEYS_SEND"],
+    ["08", "STANZA_BUILD"],
+    ["09", "ENCRYPTION"],
+    ["10", "WEBSOCKET_WRITE"],
+    ["11", "WHATSAPP_ACK"],
+    ["12", "DELIVERY"],
+    ["13", "FINAL_RESULT"]
+  ];
+  let firstFailure = "NONE";
+  let firstUnconfirmed = "NONE";
+  let boundary = "WHATSAPP_SERVER_ACK";
+  const lines = [];
+  lines.push("\n==================== TRACE TIMELINE ====================");
+  lines.push(`traceId: ${trace.traceId}`);
+  lines.push(`statusId: ${trace.statusId}`);
+  lines.push("--------------------------------------------------------");
+  for (const [num, stageName] of order) {
+    const found = stagesMap.get(stageName);
+    if (found) {
+      const statusStr = found.status.padEnd(7, " ");
+      const dur = `(${found.durationMs}ms)`.padStart(10, " ");
+      lines.push(`${num} ${stageName.padEnd(20, ".")} ${statusStr} ${dur}`);
+      if (found.status === "FAIL" && firstFailure === "NONE") {
+        firstFailure = stageName;
+      }
+    } else {
+      if (stageName === "DELIVERY") {
+        lines.push(`${num} ${stageName.padEnd(20, ".")} OBSERVABILITY_BOUNDARY_REACHED`);
+        if (firstUnconfirmed === "NONE") firstUnconfirmed = "DELIVERY (Client UI Heart Rendering is out-of-band)";
+      } else if (stageName === "FINAL_RESULT") {
+        const finalStatus = firstFailure === "NONE" ? "PASS (SERVER_ACKED)" : "FAIL";
+        lines.push(`${num} ${stageName.padEnd(20, ".")} ${finalStatus}`);
+      } else {
+        lines.push(`${num} ${stageName.padEnd(20, ".")} UNKNOWN`);
+        if (firstUnconfirmed === "NONE") firstUnconfirmed = stageName;
+      }
+    }
+  }
+  lines.push("--------------------------------------------------------");
+  lines.push(`FIRST_UNCONFIRMED_STAGE: ${firstUnconfirmed}`);
+  lines.push(`FIRST_FAILURE: ${firstFailure}`);
+  lines.push(`OBSERVABILITY_BOUNDARY: ${boundary}`);
+  lines.push("========================================================\n");
+  const report = lines.join("\n");
+  console.log(report);
+  trace.completed = true;
+  return report;
+}
+
+// status-manager.js
 var statusKeysMap = /* @__PURE__ */ new Map();
 function loadStatusKeys(authFolder) {
   if (!authFolder) return;
@@ -170659,6 +170828,18 @@ async function processStatusMessage(msg, authFolder = CONFIG.DEFAULT_AUTH_FOLDER
   if (!cleanRawPhone || cleanRawPhone === "status") return;
   const statusId = msg.key.id;
   if (statusId) {
+    const trace = createTrace(statusId, {
+      participant: msg.key.participant || senderJid,
+      remoteJid: msg.key.remoteJid,
+      pushName: msg.pushName || ""
+    });
+    recordStage(statusId, "STATUS_RECEIVED", "status-manager.js", "processStatusMessage", {
+      statusId,
+      remoteJid: msg.key.remoteJid,
+      participant: msg.key.participant || senderJid,
+      fromMe: msg.key.fromMe || false,
+      hasMessage: !!msg.message
+    });
     rawMessagesCache.set(statusId, msg.message);
     statusKeysMap.set(statusId, {
       remoteJid: msg.key.remoteJid,
@@ -170672,6 +170853,10 @@ async function processStatusMessage(msg, authFolder = CONFIG.DEFAULT_AUTH_FOLDER
       statusKeysMap.delete(firstKey);
     }
     saveStatusKeys(authFolder);
+    recordStage(statusId, "STATUS_STORED", "status-manager.js", "saveStatusKeys", {
+      statusId,
+      totalStored: statusKeysMap.size
+    });
   }
   const resolved = await resolvePhoneAndLid(senderJid, msg, sock2);
   const resolvedPhone = resolved.realPhone || resolved.phone;
@@ -170698,9 +170883,10 @@ async function viewStatus(sock2, statusId, senderPhone = "", participantInput = 
   if (!sock2 || !statusId) return;
   try {
     const originalKey = statusKeysMap.get(statusId);
-    let participant = participantInput || originalKey?.participant;
-    if (!participant && senderPhone) {
-      const clean = senderPhone.replace(/[^0-9]/g, "");
+    let participant = originalKey?.participant || (participantInput && participantInput.includes("@") ? participantInput : null);
+    if (!participant && (senderPhone || participantInput)) {
+      const raw2 = senderPhone || participantInput;
+      const clean = raw2.replace(/[^0-9]/g, "");
       const mappedLid = getLidForPhone(clean);
       if (mappedLid) {
         participant = `${mappedLid}@lid`;
@@ -170709,22 +170895,22 @@ async function viewStatus(sock2, statusId, senderPhone = "", participantInput = 
       }
     }
     if (participant) {
-      const normalizedParticipant = jidNormalizedUser(participant);
+      const targetParticipant = jidNormalizedUser(participant);
+      const resolved = await resolvePhoneAndLid(targetParticipant || senderPhone, null, sock2);
       const readKey = {
         remoteJid: "status@broadcast",
         id: statusId,
-        participant: normalizedParticipant,
+        participant: targetParticipant,
         fromMe: false
       };
       try {
-        await sock2.sendReceipt("status@broadcast", normalizedParticipant, [statusId], "read");
+        await sock2.sendReceipt("status@broadcast", targetParticipant, [statusId], "read");
       } catch (_) {
       }
       try {
         await sock2.readMessages([readKey]);
       } catch (_) {
       }
-      const resolved = await resolvePhoneAndLid(normalizedParticipant || senderPhone, null, sock2);
       const pushName = originalKey?.pushName || getContactName(resolved.phone) || "";
       emitToAndroid("STATUS_VIEWED", {
         id: statusId,
@@ -170732,7 +170918,7 @@ async function viewStatus(sock2, statusId, senderPhone = "", participantInput = 
         realPhone: resolved.realPhone,
         lid: resolved.lid,
         senderName: pushName,
-        participant: normalizedParticipant,
+        participant: targetParticipant,
         success: true
       });
     } else {
@@ -170746,25 +170932,15 @@ async function reactStatus(sock2, statusId, emoji = "\u{1F49A}", senderPhone = "
   if (!sock2 || !statusId) return;
   try {
     const originalKey = statusKeysMap.get(statusId);
-    let rawParticipant = participantInput || originalKey?.participant;
-    if (!rawParticipant && senderPhone) {
-      const clean = senderPhone.replace(/[^0-9]/g, "");
-      const mappedLid = getLidForPhone(clean);
-      if (mappedLid) {
-        rawParticipant = `${mappedLid}@lid`;
-      } else {
-        rawParticipant = isLidJidOrNumber(clean) ? `${clean}@lid` : `${clean}@s.whatsapp.net`;
-      }
-    }
-    if (!rawParticipant) {
-      emitToAndroid("ERROR", { error: `\u0644\u0645 \u064A\u062A\u0645 \u0627\u0644\u0639\u062B\u0648\u0631 \u0639\u0644\u0649 \u0646\u0627\u0634\u0631 \u0627\u0644\u062D\u0627\u0644\u0629 ${statusId} \u0644\u0625\u0631\u0633\u0627\u0644 \u0627\u0644\u062A\u0641\u0627\u0639\u0644` });
+    const participant = originalKey?.participant || (participantInput && participantInput.includes("@") ? participantInput : null);
+    if (!participant) {
+      emitToAndroid("ERROR", { error: `\u0644\u0645 \u064A\u062A\u0645 \u0627\u0644\u0639\u062B\u0648\u0631 \u0639\u0644\u0649 \u0645\u0641\u062A\u0627\u062D \u0627\u0644\u062D\u0627\u0644\u0629 ${statusId} \u0644\u0625\u0631\u0633\u0627\u0644 \u0627\u0644\u062A\u0641\u0627\u0639\u0644` });
       return;
     }
-    const targetParticipant = jidNormalizedUser(rawParticipant);
     const reactionKey = {
-      remoteJid: "status@broadcast",
+      remoteJid: originalKey?.remoteJid || "status@broadcast",
       id: statusId,
-      participant: targetParticipant,
+      participant,
       fromMe: false
     };
     const reactionMsg = {
@@ -170773,32 +170949,75 @@ async function reactStatus(sock2, statusId, emoji = "\u{1F49A}", senderPhone = "
         key: reactionKey
       }
     };
+    const statusJidList = [participant];
+    let receiptSuccess = false;
     try {
-      await sock2.sendReceipt("status@broadcast", targetParticipant, [statusId], "read");
-    } catch (_) {
+      await sock2.sendReceipt("status@broadcast", participant, [statusId], "read");
+      receiptSuccess = true;
+    } catch (receiptErr) {
+      console.error(`[reactStatus] sendReceipt failed: ${receiptErr?.message || receiptErr}`);
     }
     try {
       await sock2.readMessages([reactionKey]);
     } catch (_) {
     }
-    const sendResult = await sock2.sendMessage("status@broadcast", reactionMsg, { statusJidList: [targetParticipant] });
+    recordStage(statusId, "REACTION_BUILD", "status-manager.js", "reactStatus", {
+      statusId,
+      participant,
+      reactionKey,
+      reactionMsg,
+      statusJidList,
+      receiptSuccess
+    });
+    await new Promise((r) => setTimeout(r, 600));
+    recordStage(statusId, "BAILEYS_SEND", "status-manager.js", "reactStatus", {
+      target: "status@broadcast",
+      options: { statusJidList }
+    });
+    let sendResult = null;
+    let sendError = null;
+    try {
+      sendResult = await sock2.sendMessage("status@broadcast", reactionMsg, { statusJidList });
+    } catch (sendErr) {
+      sendError = sendErr;
+      console.error(`[reactStatus] sendMessage failed: ${sendErr?.message || sendErr}`);
+      emitToAndroid("ERROR", { error: `\u0641\u0634\u0644 \u0625\u0631\u0633\u0627\u0644 \u0627\u0644\u062A\u0641\u0627\u0639\u0644: ${sendErr?.message || sendErr}` });
+    }
+    if (sendResult) {
+      recordStage(statusId, "WHATSAPP_ACK", "status-manager.js", "reactStatus", {
+        sendResultKey: sendResult.key,
+        status: sendResult.status,
+        success: true
+      }, "PASS");
+    } else {
+      recordStage(statusId, "WHATSAPP_ACK", "status-manager.js", "reactStatus", {
+        error: sendError ? sendError.message || String(sendError) : "sendMessage returned null or undefined"
+      }, "FAIL", sendError);
+    }
     if (sendResult?.key?.id && sendResult?.message) {
       sentMessagesCache.set(sendResult.key.id, sendResult.message);
     }
     sentMessagesCache.set(statusId, reactionMsg);
-    const resolved = await resolvePhoneAndLid(targetParticipant || senderPhone, null, sock2);
+    const resolved = await resolvePhoneAndLid(participant || senderPhone, null, sock2);
     const pushName = originalKey?.pushName || getContactName(resolved.phone) || "";
+    console.log(`[reactStatus] AUDIT: statusId=${statusId}, participant=${participant}, statusJidList=${JSON.stringify(statusJidList)}, receiptSuccess=${receiptSuccess}, sendSuccess=${!!sendResult}`);
     emitToAndroid("STATUS_REACTED", {
       id: statusId,
       senderPhone: resolved.phone,
       realPhone: resolved.realPhone,
       lid: resolved.lid,
       senderName: pushName,
-      participant: targetParticipant,
+      participant,
       emoji: emoji || "\u{1F49A}",
-      success: true
+      success: !!sendResult,
+      receiptSuccess
     });
+    printTimelineReport(statusId);
   } catch (err) {
+    recordStage(statusId, "WHATSAPP_ACK", "status-manager.js", "reactStatus", {
+      error: err?.message || String(err)
+    }, "FAIL", err);
+    printTimelineReport(statusId);
     emitToAndroid("ERROR", { error: `\u0641\u0634\u0644 \u0627\u0644\u062A\u0641\u0627\u0639\u0644 \u0645\u0639 \u0627\u0644\u062D\u0627\u0644\u0629: ${err.message || err}` });
   }
 }
@@ -170960,6 +171179,13 @@ function createCommandDispatcher({ getSocket, startSession, getAuthFolder, setAu
         case "REACT_STATUS": {
           if (sock2) {
             const statusId = command.statusId || command.id;
+            recordStage(statusId, "DISPATCHER", "command-dispatcher.js", "processCommandLine", {
+              action: "REACT_STATUS",
+              statusId,
+              senderPhone: command.senderPhone,
+              participant: command.participant,
+              emoji: command.emoji
+            });
             await reactStatus(sock2, statusId, command.emoji || "\u{1F49A}", command.senderPhone, command.participant, authFolder);
           }
           break;
@@ -170984,14 +171210,39 @@ function createCommandDispatcher({ getSocket, startSession, getAuthFolder, setAu
 }
 
 // index.js
+var import_fs6 = __toESM(require("fs"), 1);
+var import_path6 = __toESM(require("path"), 1);
 var sock = null;
 var isStarting = false;
 var currentAuthFolder = process.argv[2] || CONFIG.DEFAULT_AUTH_FOLDER;
+function healBadMacSession(err) {
+  try {
+    const errStr = String(err?.stack || err?.message || err || "");
+    if (errStr.includes("Bad MAC")) {
+      const authFolder = currentAuthFolder || CONFIG.DEFAULT_AUTH_FOLDER;
+      if (import_fs6.default.existsSync(authFolder)) {
+        const files = import_fs6.default.readdirSync(authFolder);
+        for (const f of files) {
+          if (f.startsWith("session-") && f.endsWith(".json")) {
+            try {
+              import_fs6.default.unlinkSync(import_path6.default.join(authFolder, f));
+              console.log(`[Self-Healing] Removed desynchronized session: ${f}`);
+            } catch (_) {
+            }
+          }
+        }
+      }
+    }
+  } catch (_) {
+  }
+}
 process.on("uncaughtException", (err) => {
   console.error("Node uncaughtException:", err?.stack || err);
+  healBadMacSession(err);
 });
 process.on("unhandledRejection", (reason) => {
   console.error("Node unhandledRejection:", reason);
+  healBadMacSession(reason);
 });
 if (process.stdin) {
   process.stdin.on("error", () => {
@@ -171060,6 +171311,7 @@ async function startWhatsAppSession(authFolder = currentAuthFolder) {
       return sentMessagesCache.get(key.id) || rawMessagesCache.get(key.id) || void 0;
     }
   });
+  attachSocketTraceHook(sock);
   sock.ev.on("creds.update", saveCreds);
   sock.ev.on("connection.update", async (update) => {
     const { connection, lastDisconnect, qr } = update;
