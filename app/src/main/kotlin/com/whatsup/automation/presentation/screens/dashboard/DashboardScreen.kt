@@ -1,5 +1,6 @@
 package com.whatsup.automation.presentation.screens.dashboard
 
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -42,6 +43,17 @@ fun DashboardScreen(
     val uiState by viewModel.uiState.collectAsState()
     val haptic = LocalHapticFeedback.current
     val pullToRefreshState = rememberPullToRefreshState()
+    
+    val infiniteTransition = rememberInfiniteTransition(label = "pulseTransition")
+    val pulseAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(900, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulseAlpha"
+    )
 
     PullToRefreshBox(
         isRefreshing = uiState.isRefreshing,
@@ -227,7 +239,14 @@ fun DashboardScreen(
                                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
                                     Box(
-                                        modifier = Modifier.size(7.dp).clip(CircleShape).background(if (uiState.connectionState is ConnectionState.Connected) WhatsAppGreen else AmberWarning)
+                                        modifier = Modifier
+                                            .size(8.dp)
+                                            .clip(CircleShape)
+                                            .background(
+                                                if (uiState.connectionState is ConnectionState.Connected) 
+                                                    WhatsAppGreen.copy(alpha = pulseAlpha) 
+                                                else AmberWarning
+                                            )
                                     )
                                     Text(
                                         text = if (uiState.connectionState is ConnectionState.Connected) "الأساسي: متصل 👑" else "الأساسي: بانتظار الربط",
@@ -251,7 +270,14 @@ fun DashboardScreen(
                                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
                                     Box(
-                                        modifier = Modifier.size(7.dp).clip(CircleShape).background(if (uiState.isAssistantActive) CyberCyan else TextMuted)
+                                        modifier = Modifier
+                                            .size(8.dp)
+                                            .clip(CircleShape)
+                                            .background(
+                                                if (uiState.isAssistantActive) 
+                                                    CyberCyan.copy(alpha = pulseAlpha) 
+                                                else TextMuted
+                                            )
                                     )
                                     Text(
                                         text = if (uiState.isAssistantActive) "المساعد: جاهز كدرع 🛡️" else "المساعد: بانتظار التفعيل",

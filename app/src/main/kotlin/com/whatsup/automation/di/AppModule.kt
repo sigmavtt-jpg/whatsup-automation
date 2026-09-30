@@ -38,4 +38,11 @@ abstract class AppModule {
     abstract fun bindGroupRepository(
         impl: com.whatsup.automation.data.repository.GroupRepositoryImpl
     ): com.whatsup.automation.domain.repository.GroupRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindContactFormattingRepository(
+        impl: com.whatsup.automation.data.repository.ContactFormattingRepositoryImpl
+    ): com.whatsup.automation.domain.repository.ContactFormattingRepository
 }
+

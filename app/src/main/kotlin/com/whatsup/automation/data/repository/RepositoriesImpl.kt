@@ -197,7 +197,9 @@ internal fun RuleEntity.toDomain(): Rule {
                 "SEND_REPLY" -> actionsList.add(
                     RuleAction.SendReply(obj.optString("message"))
                 )
-                
+                "SAVE_CONTACT_AND_REPLY", "SAVE_CONTACT" -> actionsList.add(
+                    RuleAction.SaveContactAndReply(obj.optString("message", obj.optString("replyMessage", "")))
+                )
             }
         }
     } catch (_: Exception) {}
@@ -224,7 +226,10 @@ internal fun Rule.toEntity(): RuleEntity {
                 obj.put("type", "SEND_REPLY")
                 obj.put("message", action.message)
             }
-            
+            is RuleAction.SaveContactAndReply -> {
+                obj.put("type", "SAVE_CONTACT_AND_REPLY")
+                obj.put("message", action.replyMessage)
+            }
         }
         array.put(obj)
     }
@@ -360,6 +365,61 @@ class GroupRepositoryImpl @Inject constructor(
         return groupId
     }
 
+    override suspend fun createPartitionedGroups(
+        baseName: String,
+        description: String,
+        members: List<GroupMember>,
+        partitionSize: Int
+    ): List<Long> {
+        val safePartitionSize = if (partitionSize <= 0) 100 else partitionSize
+        val chunks = members.chunked(safePartitionSize)
+        val createdGroupIds = mutableListOf<Long>()
+
+        chunks.forEachIndexed { index, chunk ->
+            val groupName = if (chunks.size == 1) {
+                baseName
+            } else {
+                "$baseName - دفعة ${index + 1} (${chunk.size})"
+            }
+
+            val groupId = groupDao.insertGroup(
+                com.whatsup.automation.data.local.entity.GroupEntity(
+                    name = groupName,
+                    description = if (description.isNotBlank()) description else "مجموعة مجزأة من حملة: $baseName",
+                    createdAt = System.currentTimeMillis() + index // لضمان الترتيب الزمني
+                )
+            )
+
+            val memberEntities = chunk.map { member ->
+                com.whatsup.automation.data.local.entity.GroupMemberEntity(
+                    groupId = groupId,
+                    contactName = member.contactName,
+                    phone = member.phone,
+                    addedAt = System.currentTimeMillis()
+                )
+            }
+            groupMemberDao.insertMembers(memberEntities)
+            createdGroupIds.add(groupId)
+        }
+
+        return createdGroupIds
+    }
+
+    override suspend fun addMemberToGroup(groupId: Long, member: GroupMember): Long {
+        return groupMemberDao.insertMember(
+            com.whatsup.automation.data.local.entity.GroupMemberEntity(
+                groupId = groupId,
+                contactName = member.contactName,
+                phone = member.phone,
+                addedAt = System.currentTimeMillis()
+            )
+        )
+    }
+
+    override suspend fun removeMemberFromGroup(memberId: Long) {
+        groupMemberDao.deleteMemberById(memberId)
+    }
+
     override suspend fun deleteGroup(groupId: Long) {
         groupDao.deleteGroup(groupId)
         groupMemberDao.deleteMembersForGroup(groupId)
@@ -377,11 +437,15 @@ class GroupRepositoryImpl @Inject constructor(
         return groupLogDao.getCompletedLogsForGroup(groupId).map { list -> list.map { it.toDomain() } }
     }
 
-    override suspend fun sendBroadcastMessageToGroup(groupId: Long, messageText: String) {
+    override suspend fun sendBroadcastMessageToGroup(
+        groupId: Long, 
+        messageText: String,
+        onProgress: ((sent: Int, total: Int) -> Unit)?
+    ) {
         val members = groupMemberDao.getMembersForGroupSync(groupId)
         val group = groupDao.getGroupById(groupId) ?: return
 
-        for (member in members) {
+        for ((index, member) in members.withIndex()) {
             val logId = groupLogDao.insertLog(
                 com.whatsup.automation.data.local.entity.GroupLogEntity(
                     groupId = groupId,
@@ -445,6 +509,19 @@ class GroupRepositoryImpl @Inject constructor(
                     )
                 )
             }
+
+            onProgress?.invoke(index + 1, members.size)
+
+            // درع مكافحة الحظر: فاصل زمني عشوائي بين 4 إلى 9 ثوانٍ بين كل رسالة
+            if (index < members.size - 1) {
+                val randomDelay = kotlin.random.Random.nextLong(4000, 9000)
+                kotlinx.coroutines.delay(randomDelay)
+
+                // استراحة كل 25 رسالة
+                if ((index + 1) % 25 == 0) {
+                    kotlinx.coroutines.delay(20000)
+                }
+            }
         }
     }
 }
@@ -481,5 +558,51 @@ internal fun com.whatsup.automation.data.local.entity.GroupLogEntity.toDomain():
         errorMessage = errorMessage
     )
 }
+
+/**
+ * تنفيذ مستودع إعدادات تنسيق وتوسيم جهات الاتصال محلياً عبر SharedPreferences.
+ */
+@Singleton
+class ContactFormattingRepositoryImpl @Inject constructor(
+    @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context
+) : com.whatsup.automation.domain.repository.ContactFormattingRepository {
+
+    private companion object {
+        const val PREFS_NAME = "whatsup_contact_formatting_settings"
+        const val KEY_IS_ENABLED = "formatting_is_enabled"
+        const val KEY_PREFIX = "formatting_prefix"
+        const val KEY_SUFFIX = "formatting_suffix"
+        const val KEY_TAG = "formatting_tag"
+        const val KEY_EMOJI = "formatting_emoji"
+    }
+
+    private val prefs = context.getSharedPreferences(PREFS_NAME, android.content.Context.MODE_PRIVATE)
+
+    private val settingsFlow = kotlinx.coroutines.flow.MutableStateFlow(
+        com.whatsup.automation.domain.model.ContactFormattingSettings(
+            isEnabled = prefs.getBoolean(KEY_IS_ENABLED, true),
+            prefix = prefs.getString(KEY_PREFIX, "") ?: "",
+            suffix = prefs.getString(KEY_SUFFIX, "") ?: "",
+            customTag = prefs.getString(KEY_TAG, "جهات نشر") ?: "جهات نشر",
+            customEmoji = prefs.getString(KEY_EMOJI, "❤️") ?: "❤️"
+        )
+    )
+
+    override fun getSettings(): Flow<com.whatsup.automation.domain.model.ContactFormattingSettings> {
+        return settingsFlow
+    }
+
+    override suspend fun updateSettings(settings: com.whatsup.automation.domain.model.ContactFormattingSettings) {
+        prefs.edit()
+            .putBoolean(KEY_IS_ENABLED, settings.isEnabled)
+            .putString(KEY_PREFIX, settings.prefix)
+            .putString(KEY_SUFFIX, settings.suffix)
+            .putString(KEY_TAG, settings.customTag)
+            .putString(KEY_EMOJI, settings.customEmoji)
+            .apply()
+        settingsFlow.value = settings
+    }
+}
+
 
 

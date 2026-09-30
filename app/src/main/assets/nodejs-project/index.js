@@ -42,25 +42,13 @@ let isStarting = false;
 let currentAuthFolder = process.argv[2] || CONFIG.DEFAULT_AUTH_FOLDER;
 
 /**
- * Self-healing: Removes desynchronized session files when Bad MAC errors occur.
+ * Self-healing: Safely logs Signal session errors without destroying all unrelated sessions.
  */
 function healBadMacSession(err) {
     try {
         const errStr = String(err?.stack || err?.message || err || '');
         if (errStr.includes('Bad MAC')) {
-            const authFolder = currentAuthFolder || CONFIG.DEFAULT_AUTH_FOLDER;
-            if (fs.existsSync(authFolder)) {
-                const files = fs.readdirSync(authFolder);
-                for (const f of files) {
-                    if (f.startsWith('session-') && f.endsWith('.json')) {
-                        // If specific session or all stale sessions
-                        try {
-                            fs.unlinkSync(path.join(authFolder, f));
-                            console.log(`[Self-Healing] Removed desynchronized session: ${f}`);
-                        } catch (_) {}
-                    }
-                }
-            }
+            console.warn('[Self-Healing] Transient Bad MAC detected in Signal ratchet; relying on Baileys PreKey retry resolver.');
         }
     } catch (_) {}
 }

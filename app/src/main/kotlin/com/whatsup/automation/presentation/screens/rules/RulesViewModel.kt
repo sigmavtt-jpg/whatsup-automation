@@ -6,31 +6,23 @@ import com.whatsup.automation.domain.model.PatternType
 import com.whatsup.automation.domain.model.Rule
 import com.whatsup.automation.domain.model.RuleAction
 import com.whatsup.automation.domain.repository.RuleRepository
-import com.whatsup.automation.domain.usecase.MatchRuleUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-data class TestRuleResult(
-    val matchedRule: Rule,
-    val resultingReply: String,
-    val extractedName: String? = null
-)
-
 data class RulesUiState(
     val rules: List<Rule> = emptyList(),
     val isLoading: Boolean = true,
     val isRefreshing: Boolean = false,
-    val testInput: String = "",
-    val testResult: TestRuleResult? = null,
-    val editingRule: Rule? = null
+    val editingRule: Rule? = null,
+    val formattingSettings: com.whatsup.automation.domain.model.ContactFormattingSettings = com.whatsup.automation.domain.model.ContactFormattingSettings()
 )
 
 @HiltViewModel
 class RulesViewModel @Inject constructor(
     private val ruleRepository: RuleRepository,
-    private val matchRuleUseCase: MatchRuleUseCase
+    private val contactFormattingRepository: com.whatsup.automation.domain.repository.ContactFormattingRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(RulesUiState())
@@ -38,6 +30,25 @@ class RulesViewModel @Inject constructor(
 
     init {
         observeRules()
+        observeFormattingSettings()
+    }
+
+    private fun observeFormattingSettings() {
+        viewModelScope.launch {
+            try {
+                contactFormattingRepository.getSettings().collect { settings ->
+                    _uiState.update { it.copy(formattingSettings = settings) }
+                }
+            } catch (_: Exception) {}
+        }
+    }
+
+    fun updateFormattingSettings(settings: com.whatsup.automation.domain.model.ContactFormattingSettings) {
+        viewModelScope.launch {
+            try {
+                contactFormattingRepository.updateSettings(settings)
+            } catch (_: Exception) {}
+        }
     }
 
     private fun observeRules() {
@@ -47,10 +58,6 @@ class RulesViewModel @Inject constructor(
                     val sorted = ruleList.sortedBy { it.priority }
                     _uiState.update { current ->
                         current.copy(rules = sorted, isLoading = false)
-                    }
-                    // إعادة تقييم الفحص التجريبي إن وُجد نص
-                    if (_uiState.value.testInput.isNotBlank()) {
-                        onTestInputChange(_uiState.value.testInput)
                     }
                 }
             } catch (e: Exception) {
@@ -93,16 +100,21 @@ class RulesViewModel @Inject constructor(
         patternType: PatternType,
         patternValue: String,
         replyMessage: String?,
+        isSaveContact: Boolean = false,
         priority: Int = 1
     ) {
         viewModelScope.launch {
             try {
-                val actions = mutableListOf<RuleAction>()
-                if (!replyMessage.isNullOrBlank()) {
-                    actions.add(RuleAction.SendReply(replyMessage.trim()))
+                val finalReply = if (!replyMessage.isNullOrBlank()) {
+                    replyMessage.trim()
+                } else {
+                    if (isSaveContact) "تم حفظك باسم {name} بنجاح ✅" else "تم استلام رسالتك بنجاح."
                 }
-                if (actions.isEmpty()) {
-                    actions.add(RuleAction.SendReply("تم استلام رسالتك بنجاح."))
+
+                val action: RuleAction = if (isSaveContact) {
+                    RuleAction.SaveContactAndReply(finalReply)
+                } else {
+                    RuleAction.SendReply(finalReply)
                 }
 
                 val newRule = Rule(
@@ -110,7 +122,7 @@ class RulesViewModel @Inject constructor(
                     description = description.trim(),
                     patternType = patternType,
                     patternValue = patternValue.trim(),
-                    actions = actions,
+                    actions = listOf(action),
                     priority = priority,
                     isEnabled = true
                 )
@@ -126,17 +138,22 @@ class RulesViewModel @Inject constructor(
         patternType: PatternType,
         patternValue: String,
         replyMessage: String?,
+        isSaveContact: Boolean = false,
         priority: Int = 1
     ) {
         viewModelScope.launch {
             try {
                 val existing = ruleRepository.getRuleById(ruleId)
-                val actions = mutableListOf<RuleAction>()
-                if (!replyMessage.isNullOrBlank()) {
-                    actions.add(RuleAction.SendReply(replyMessage.trim()))
+                val finalReply = if (!replyMessage.isNullOrBlank()) {
+                    replyMessage.trim()
+                } else {
+                    if (isSaveContact) "تم حفظك باسم {name} بنجاح ✅" else "تم استلام رسالتك بنجاح."
                 }
-                if (actions.isEmpty()) {
-                    actions.add(RuleAction.SendReply("تم استلام رسالتك بنجاح."))
+
+                val action: RuleAction = if (isSaveContact) {
+                    RuleAction.SaveContactAndReply(finalReply)
+                } else {
+                    RuleAction.SendReply(finalReply)
                 }
 
                 val updated = Rule(
@@ -145,7 +162,7 @@ class RulesViewModel @Inject constructor(
                     description = description.trim(),
                     patternType = patternType,
                     patternValue = patternValue.trim(),
-                    actions = actions,
+                    actions = listOf(action),
                     priority = priority,
                     isEnabled = existing?.isEnabled ?: true,
                     createdAt = existing?.createdAt ?: java.time.Instant.now()
@@ -153,42 +170,6 @@ class RulesViewModel @Inject constructor(
                 ruleRepository.updateRule(updated)
                 _uiState.update { it.copy(editingRule = null) }
             } catch (_: Exception) {}
-        }
-    }
-
-    fun onTestInputChange(input: String) {
-        if (input.isBlank()) {
-            _uiState.update { it.copy(testInput = input, testResult = null) }
-            return
-        }
-
-        try {
-            val enabledRules = _uiState.value.rules.filter { it.isEnabled }.sortedBy { it.priority }
-            val matchedRule = enabledRules.firstOrNull { matchRuleUseCase.matches(it, input) }
-
-            val result = if (matchedRule != null) {
-                var resultingReply = ""
-                var extractedName: String? = null
-                for (action in matchedRule.actions) {
-                    when (action) {
-                        is RuleAction.SendReply -> {
-                            val replyLines = action.message.lines().map { it.trim() }.filter { it.isNotBlank() }
-                            resultingReply = if (replyLines.isNotEmpty()) replyLines.first() else action.message
-                        }
-                    }
-                }
-                TestRuleResult(
-                    matchedRule = matchedRule,
-                    resultingReply = resultingReply,
-                    extractedName = extractedName
-                )
-            } else {
-                null
-            }
-
-            _uiState.update { it.copy(testInput = input, testResult = result) }
-        } catch (e: Exception) {
-            _uiState.update { it.copy(testInput = input, testResult = null) }
         }
     }
 }

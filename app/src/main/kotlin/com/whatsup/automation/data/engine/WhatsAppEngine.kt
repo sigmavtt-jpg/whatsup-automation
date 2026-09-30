@@ -169,27 +169,39 @@ class WhatsAppEngine @Inject constructor(
     fun isMasterEngineConnected(): Boolean = _connectionState.value is ConnectionState.Connected
 
     /**
+     * فحص ما إذا كانت هناك جلسة واتساب نشطة ومحفوظة مسبقاً.
+     */
+    fun hasSavedSession(): Boolean {
+        val authDir = java.io.File(context.filesDir, "baileys_auth")
+        val credsFile = java.io.File(authDir, "creds.json")
+        return sessionKeystore.isSessionActive() || (credsFile.exists() && credsFile.length() > 50)
+    }
+
+    /**
      * التحقق من الحالة الحقيقية للاتصال وتحديثها لجلسة Baileys.
      */
     fun refreshRealConnectionState(): Boolean {
-        val authDir = java.io.File(context.filesDir, "baileys_auth")
-        val credsFile = java.io.File(authDir, "creds.json")
-        val isSessionActive = sessionKeystore.isSessionActive() || (credsFile.exists() && credsFile.length() > 50)
+        val isSessionActive = hasSavedSession()
         _connectionState.value = if (isSessionActive) {
             ConnectionState.Connected
         } else {
-            ConnectionState.AwaitingPairing
+            ConnectionState.Disconnected
         }
         return isSessionActive
     }
 
     /**
-     * بدء تشغيل المحرك والتحقق من الجلسة والصلاحيات الحقيقية.
+     * بدء تشغيل المحرك: إذا كانت الجلسة موجودة مسبقاً يبدأ الجسر فورياً لإبقاء الأتمتة نشطة 24/7.
+     * أما إذا لم تكن الجلسة مقترنة، ينتظر طلب الاقتران عند الطلب (On-Demand) لتوفير البطارية وتفادي انقطاعات المقبس المتكررة.
      */
     fun startEngine() {
-        baileysBridgeManager.start()
-        if (!refreshRealConnectionState()) {
-            _connectionState.value = ConnectionState.AwaitingPairing
+        if (hasSavedSession()) {
+            logDiagnosticEvent("ENGINE", "جلسة محفوظة موجودة، بدء تشغيل محرك Baileys تلقائياً...")
+            baileysBridgeManager.start()
+            _connectionState.value = ConnectionState.Connected
+        } else {
+            logDiagnosticEvent("ENGINE", "لا توجد جلسة محفوظة — المحرك في وضع الانتظار عند الطلب لتوفير موارد الهاتف.")
+            _connectionState.value = ConnectionState.Disconnected
         }
     }
 
@@ -275,12 +287,19 @@ class WhatsAppEngine @Inject constructor(
     fun logout() {
         scope.launch {
             baileysBridgeManager.logout()
-            baileysBridgeManager.clearAuthState()
-            sessionKeystore.clearSession()
-            _connectionState.value = ConnectionState.Disconnected
-            _qrCode.value = null
-            _pairingCode.value = null
+            handleSessionLoggedOut()
         }
+    }
+
+    /**
+     * تنظيف ومعالجة حالة الخروج محلياً دون إعادة إرسال أمر LOGOUT للمحرك لتفادي الحلقات التكرارية.
+     */
+    private fun handleSessionLoggedOut() {
+        baileysBridgeManager.clearAuthState()
+        sessionKeystore.clearSession()
+        _connectionState.value = ConnectionState.Disconnected
+        _qrCode.value = null
+        _pairingCode.value = null
     }
 
     /**
@@ -385,10 +404,9 @@ class WhatsAppEngine @Inject constructor(
                     val authDir = java.io.File(context.filesDir, "baileys_auth")
                     val credsFile = java.io.File(authDir, "creds.json")
                     if (credsFile.exists() && credsFile.length() > 50) {
-                        _connectionState.value = ConnectionState.Connected
                         sessionKeystore.setSessionActive(true)
                     }
-                    logDiagnosticEvent("BRIDGE", "Baileys local bridge connected successfully.")
+                    logDiagnosticEvent("BRIDGE", "Baileys local bridge running. Awaiting socket connection...")
                 }
                 "QR_CODE" -> {
                     val qr = data.optString("qr")
@@ -517,7 +535,7 @@ class WhatsAppEngine @Inject constructor(
                 }
                 "LOGGED_OUT" -> {
                     logDiagnosticEvent("SESSION", "Logged out from WhatsApp")
-                    logout()
+                    handleSessionLoggedOut()
                 }
                 "ERROR", "FATAL_ERROR" -> {
                     val errorMsg = data.optString("error", "حدث خطأ في محرك واتساب")

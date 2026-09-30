@@ -747,13 +747,43 @@ fun ConversationDetailDialog(
                                 }
                             }
 
-                            IconButton(
-                                onClick = onDismiss,
-                                modifier = Modifier
-                                    .clip(CircleShape)
-                                    .background(DarkSurface)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                Icon(Icons.Filled.Close, contentDescription = "إغلاق", tint = TextPrimary)
+                                val context = LocalContext.current
+                                val haptic = LocalHapticFeedback.current
+                                
+                                IconButton(
+                                    onClick = {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        val sb = java.lang.StringBuilder()
+                                        sb.append("=== سجل المحادثة مع: ${conversation.contactName ?: conversation.senderPhone} ===\n")
+                                        conversation.allLogs.reversed().forEach { log ->
+                                            sb.append("[${log.timestamp}] وارد: ${log.messageText}\n")
+                                            if (log.actionExecuted.isNotBlank()) {
+                                                sb.append(" └─ صادر: ${log.actionExecuted}\n")
+                                            }
+                                        }
+                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                        clipboard.setPrimaryClip(ClipData.newPlainText("WhatsApp Chat Log", sb.toString()))
+                                        Toast.makeText(context, "تم نسخ سجل المحادثة كاملاً 📋", Toast.LENGTH_SHORT).show()
+                                    },
+                                    modifier = Modifier
+                                        .clip(CircleShape)
+                                        .background(CyberCyan.copy(alpha = 0.15f))
+                                ) {
+                                    Icon(Icons.Filled.ContentCopy, contentDescription = "نسخ المحادثة", tint = CyberCyan, modifier = Modifier.size(18.dp))
+                                }
+
+                                IconButton(
+                                    onClick = onDismiss,
+                                    modifier = Modifier
+                                        .clip(CircleShape)
+                                        .background(DarkSurface)
+                                ) {
+                                    Icon(Icons.Filled.Close, contentDescription = "إغلاق", tint = TextPrimary)
+                                }
                             }
                         }
 
@@ -797,6 +827,8 @@ fun ConversationDetailDialog(
  */
 @Composable
 fun ChatBubbleEntry(log: ActivityLog) {
+    val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
     val timeFormatted = remember(log.timestamp) {
         val zone = ZoneId.systemDefault()
         val dt = log.timestamp.atZone(zone)
@@ -816,8 +848,14 @@ fun ChatBubbleEntry(log: ActivityLog) {
                 modifier = Modifier
                     .fillMaxWidth(0.85f)
                     .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 2.dp))
-                    .background(DarkSurface)
-                    .border(1.dp, Color(0x1FFFFFFF), RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 2.dp))
+                    .background(Color(0xFF1E293B))
+                    .border(1.dp, Color(0x2AFFFFFF), RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 2.dp))
+                    .clickable {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        clipboard.setPrimaryClip(ClipData.newPlainText("Incoming Message", log.messageText))
+                        Toast.makeText(context, "تم نسخ الرسالة الواردة", Toast.LENGTH_SHORT).show()
+                    }
                     .padding(12.dp)
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -830,7 +868,7 @@ fun ChatBubbleEntry(log: ActivityLog) {
                             text = "طرف المحادثة (وارد)",
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
-                            color = TextSecondary
+                            color = CyberCyan
                         )
                         Text(
                             text = timeFormatted,
@@ -858,66 +896,83 @@ fun ChatBubbleEntry(log: ActivityLog) {
                     modifier = Modifier
                         .fillMaxWidth(0.85f)
                         .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 2.dp))
-                        .background(WhatsAppGreen.copy(alpha = 0.2f))
-                        .border(1.dp, WhatsAppGreen.copy(alpha = 0.4f), RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 2.dp))
-                        .padding(12.dp)
-                ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        .background(Color(0xFF064E3B).copy(alpha = 0.85f))
+                        .border(1.dp, WhatsAppGreen.copy(alpha = 0.5f), RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 2.dp))
+                    .clickable {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        clipboard.setPrimaryClip(ClipData.newPlainText("Auto Reply", log.actionExecuted))
+                        Toast.makeText(context, "تم نسخ الرد التلقائي", Toast.LENGTH_SHORT).show()
+                    }
+                    .padding(12.dp)
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Icon(
-                                    Icons.Filled.SmartToy,
-                                    contentDescription = null,
-                                    tint = WhatsAppGreen,
-                                    modifier = Modifier.size(12.dp)
-                                )
-                                Text(
-                                    text = "الرد التلقائي (${log.matchedRule ?: "أتمتة"})",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = WhatsAppGreen
-                                )
-                            }
+                            Icon(
+                                Icons.Filled.SmartToy,
+                                contentDescription = null,
+                                tint = WhatsAppGreenLight,
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Text(
+                                text = "الرد التلقائي (${log.matchedRule ?: "أتمتة"})",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = WhatsAppGreenLight
+                            )
+                        }
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
                             Text(
                                 text = timeFormatted,
                                 fontSize = 9.sp,
-                                color = WhatsAppGreenLight.copy(alpha = 0.7f)
+                                color = WhatsAppGreenLight.copy(alpha = 0.8f)
+                            )
+                            Icon(
+                                Icons.Filled.DoneAll,
+                                contentDescription = "تم الإرسال",
+                                tint = CyberCyan,
+                                modifier = Modifier.size(13.dp)
                             )
                         }
+                    }
 
-                        Text(
-                            text = log.actionExecuted,
-                            fontSize = 13.sp,
-                            color = TextPrimary
-                        )
+                    Text(
+                        text = log.actionExecuted,
+                        fontSize = 13.sp,
+                        color = Color.White
+                    )
 
-                        log.extractedName?.let { name ->
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(WhatsAppGreen.copy(alpha = 0.25f))
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                            ) {
-                                Text(
-                                    text = "الاسم المستخرج: $name",
-                                    fontSize = 10.sp,
-                                    color = WhatsAppGreenLight,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
+                    log.extractedName?.let { name ->
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(WhatsAppGreen.copy(alpha = 0.3f))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = "الاسم المستخرج: $name",
+                                fontSize = 10.sp,
+                                color = WhatsAppGreenLight,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
                     }
                 }
             }
         }
     }
+}
 }
 
 @Composable

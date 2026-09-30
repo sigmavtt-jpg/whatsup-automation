@@ -139,6 +139,15 @@ interface GroupMemberDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertMembers(members: List<GroupMemberEntity>)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertMember(member: GroupMemberEntity): Long
+
+    @Query("DELETE FROM group_members WHERE id = :memberId")
+    suspend fun deleteMemberById(memberId: Long)
+
+    @Query("DELETE FROM group_members WHERE groupId = :groupId AND phone = :phone")
+    suspend fun deleteMemberByPhone(groupId: Long, phone: String)
+
     @Query("DELETE FROM group_members WHERE groupId = :groupId")
     suspend fun deleteMembersForGroup(groupId: Long)
 }

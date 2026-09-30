@@ -7,8 +7,10 @@ import com.whatsup.automation.data.local.contacts.DeviceContactsManager
 import com.whatsup.automation.domain.model.Group
 import com.whatsup.automation.domain.model.GroupMember
 import com.whatsup.automation.domain.model.GroupMessageLog
-import com.whatsup.automation.data.local.entity.SyncedContactDao
 import com.whatsup.automation.domain.repository.GroupRepository
+import com.whatsup.automation.domain.usecase.CreatePartitionedCampaignUseCase
+import com.whatsup.automation.domain.usecase.ManageGroupMembersUseCase
+import com.whatsup.automation.domain.usecase.SendCampaignBroadcastUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
@@ -21,6 +23,8 @@ data class GroupsUiState(
     val isCreateModalOpen: Boolean = false,
     val newGroupName: String = "",
     val newGroupDescription: String = "",
+    val isPartitionMode: Boolean = true,
+    val partitionSize: Int = 100,
     val deviceContacts: List<DeviceContactItem> = emptyList(),
     val contactSearchQuery: String = "",
     val selectedContactPhones: Set<String> = emptySet(),
@@ -28,16 +32,25 @@ data class GroupsUiState(
     val selectedGroupMembers: List<GroupMember> = emptyList(),
     val selectedGroupInsiteLogs: List<GroupMessageLog> = emptyList(),
     val selectedGroupCompletedLogs: List<GroupMessageLog> = emptyList(),
-    val activeDetailsTab: Int = 0, // 0 = سجل المرسل, 1 = سجل المنتهي
+    val activeDetailsTab: Int = 0, // 0 = الأعضاء وإدارتهم, 1 = سجل المستلمين (المنتهي), 2 = قيد الإرسال (الجاري)
     val broadcastTexts: Map<Long, String> = emptyMap(), // groupId -> broadcast message text
-    val isBroadcasting: Boolean = false,
+    val isBroadcastingMap: Map<Long, Boolean> = emptyMap(), // groupId -> boolean
+    val broadcastingProgress: Map<Long, Pair<Int, Int>> = emptyMap(), // groupId -> Pair(sent, total)
+    val isAddMemberModalOpen: Boolean = false,
+    val addMemberSearchQuery: String = "",
+    val selectedMembersToAdd: Set<String> = emptySet(),
+    val customAddName: String = "",
+    val customAddPhone: String = "",
     val isSuccessMessageShowing: Boolean = false
 )
 
 @HiltViewModel
 class GroupsViewModel @Inject constructor(
     private val groupRepository: GroupRepository,
-    private val deviceContactsManager: DeviceContactsManager
+    private val deviceContactsManager: DeviceContactsManager,
+    private val createPartitionedCampaignUseCase: CreatePartitionedCampaignUseCase,
+    private val sendCampaignBroadcastUseCase: SendCampaignBroadcastUseCase,
+    private val manageGroupMembersUseCase: ManageGroupMembersUseCase
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(GroupsUiState())
@@ -57,14 +70,12 @@ class GroupsViewModel @Inject constructor(
         }
     }
 
-    
     fun loadDeviceContacts() {
         viewModelScope.launch(Dispatchers.IO) {
             val phonebookContacts = deviceContactsManager.getAllDeviceContacts()
             val combined = mutableListOf<DeviceContactItem>()
             val seen = mutableSetOf<String>()
 
-            // 1. جهات اتصال الهاتف الفعلي
             for (c in phonebookContacts) {
                 val normalized = deviceContactsManager.normalizePhoneNumber(c.phone)
                 if (deviceContactsManager.isValidDisplayName(c.name) && seen.add(normalized)) {
@@ -76,13 +87,25 @@ class GroupsViewModel @Inject constructor(
         }
     }
 
-
     fun onSearchQueryChange(query: String) {
         _uiState.update { it.copy(searchQuery = query) }
     }
 
     fun onContactSearchQueryChange(query: String) {
         _uiState.update { it.copy(contactSearchQuery = query) }
+    }
+
+    fun onPartitionModeChange(enabled: Boolean) {
+        _uiState.update { it.copy(isPartitionMode = enabled) }
+    }
+
+    fun onPartitionSizeChange(size: Int) {
+        val validSize = when {
+            size <= 0 -> 100
+            size > 5000 -> 5000
+            else -> size
+        }
+        _uiState.update { it.copy(partitionSize = validSize) }
     }
 
     fun openCreateModal() {
@@ -93,7 +116,9 @@ class GroupsViewModel @Inject constructor(
                 newGroupName = "",
                 newGroupDescription = "",
                 contactSearchQuery = "",
-                selectedContactPhones = emptySet()
+                selectedContactPhones = emptySet(),
+                isPartitionMode = true,
+                partitionSize = 100
             )
         }
     }
@@ -136,17 +161,19 @@ class GroupsViewModel @Inject constructor(
     fun createGroup() {
         val currentState = _uiState.value
         val name = currentState.newGroupName.trim()
-        if (name.isBlank()) return
+        if (name.isBlank() || currentState.selectedContactPhones.isEmpty()) return
 
         val members = currentState.deviceContacts
             .filter { currentState.selectedContactPhones.contains(it.phone) }
             .map { GroupMember(contactName = it.name, phone = it.phone) }
 
         viewModelScope.launch {
-            groupRepository.createGroup(
-                name = name,
+            createPartitionedCampaignUseCase.execute(
+                baseName = name,
                 description = currentState.newGroupDescription.trim(),
-                members = members
+                members = members,
+                partitionSize = currentState.partitionSize,
+                isPartitionMode = currentState.isPartitionMode
             )
             closeCreateModal()
         }
@@ -192,13 +219,95 @@ class GroupsViewModel @Inject constructor(
                 selectedGroup = null,
                 selectedGroupMembers = emptyList(),
                 selectedGroupInsiteLogs = emptyList(),
-                selectedGroupCompletedLogs = emptyList()
+                selectedGroupCompletedLogs = emptyList(),
+                isAddMemberModalOpen = false
             )
         }
     }
 
     fun setDetailsTab(tabIndex: Int) {
         _uiState.update { it.copy(activeDetailsTab = tabIndex) }
+    }
+
+    fun removeMemberFromGroup(memberId: Long) {
+        viewModelScope.launch {
+            manageGroupMembersUseCase.removeMember(memberId)
+        }
+    }
+
+    fun openAddMemberModal() {
+        loadDeviceContacts()
+        _uiState.update {
+            it.copy(
+                isAddMemberModalOpen = true,
+                addMemberSearchQuery = "",
+                selectedMembersToAdd = emptySet(),
+                customAddName = "",
+                customAddPhone = ""
+            )
+        }
+    }
+
+    fun closeAddMemberModal() {
+        _uiState.update { it.copy(isAddMemberModalOpen = false) }
+    }
+
+    fun onAddMemberSearchQueryChange(query: String) {
+        _uiState.update { it.copy(addMemberSearchQuery = query) }
+    }
+
+    fun toggleMemberToAddSelection(phone: String) {
+        _uiState.update { current ->
+            val updated = current.selectedMembersToAdd.toMutableSet()
+            if (updated.contains(phone)) {
+                updated.remove(phone)
+            } else {
+                updated.add(phone)
+            }
+            current.copy(selectedMembersToAdd = updated)
+        }
+    }
+
+    fun onCustomAddNameChange(name: String) {
+        _uiState.update { it.copy(customAddName = name) }
+    }
+
+    fun onCustomAddPhoneChange(phone: String) {
+        _uiState.update { it.copy(customAddPhone = phone) }
+    }
+
+    fun addSelectedContactsToGroup() {
+        val currentGroup = _uiState.value.selectedGroup ?: return
+        val currentMemberPhones = _uiState.value.selectedGroupMembers.map { it.phone }.toSet()
+        val toAdd = _uiState.value.deviceContacts
+            .filter { _uiState.value.selectedMembersToAdd.contains(it.phone) && !currentMemberPhones.contains(it.phone) }
+
+        viewModelScope.launch {
+            for (contact in toAdd) {
+                manageGroupMembersUseCase.addMember(
+                    groupId = currentGroup.id,
+                    name = contact.name,
+                    phone = contact.phone
+                )
+            }
+            closeAddMemberModal()
+        }
+    }
+
+    fun addCustomContactToGroup() {
+        val currentGroup = _uiState.value.selectedGroup ?: return
+        val name = _uiState.value.customAddName.trim()
+        val phone = _uiState.value.customAddPhone.trim()
+        if (name.isBlank() || phone.isBlank()) return
+
+        viewModelScope.launch {
+            manageGroupMembersUseCase.addMember(
+                groupId = currentGroup.id,
+                name = name,
+                phone = phone
+            )
+            closeAddMemberModal()
+        }
     }
 
     fun onBroadcastTextChange(groupId: Long, text: String) {
@@ -214,13 +323,39 @@ class GroupsViewModel @Inject constructor(
         if (text.isBlank()) return
 
         viewModelScope.launch {
-            _uiState.update { it.copy(isBroadcasting = true) }
-            groupRepository.sendBroadcastMessageToGroup(groupId, text)
             _uiState.update { current ->
-                val updatedMap = current.broadcastTexts.toMutableMap()
-                updatedMap[groupId] = ""
-                current.copy(isBroadcasting = false, isSuccessMessageShowing = true)
+                val broadMap = current.isBroadcastingMap.toMutableMap()
+                broadMap[groupId] = true
+                current.copy(isBroadcastingMap = broadMap)
+            }
+
+            sendCampaignBroadcastUseCase.execute(
+                groupId = groupId,
+                messageText = text,
+                onProgress = { sent, total ->
+                    _uiState.update { current ->
+                        val progMap = current.broadcastingProgress.toMutableMap()
+                        progMap[groupId] = Pair(sent, total)
+                        current.copy(broadcastingProgress = progMap)
+                    }
+                }
+            )
+
+            _uiState.update { current ->
+                val broadMap = current.isBroadcastingMap.toMutableMap()
+                broadMap[groupId] = false
+                val textsMap = current.broadcastTexts.toMutableMap()
+                textsMap[groupId] = ""
+                current.copy(
+                    isBroadcastingMap = broadMap,
+                    broadcastTexts = textsMap,
+                    isSuccessMessageShowing = true
+                )
             }
         }
+    }
+
+    fun calculateEstimatedTime(memberCount: Int): String {
+        return sendCampaignBroadcastUseCase.calculateEstimatedTime(memberCount)
     }
 }

@@ -55,11 +55,23 @@ interface GroupRepository {
     fun getAllGroups(): Flow<List<Group>>
     fun getGroupMembers(groupId: Long): Flow<List<GroupMember>>
     suspend fun createGroup(name: String, description: String, members: List<GroupMember>): Long
+    suspend fun createPartitionedGroups(baseName: String, description: String, members: List<GroupMember>, partitionSize: Int): List<Long>
+    suspend fun addMemberToGroup(groupId: Long, member: GroupMember): Long
+    suspend fun removeMemberFromGroup(memberId: Long)
     suspend fun deleteGroup(groupId: Long)
     fun getLogsForGroup(groupId: Long): Flow<List<GroupMessageLog>>
     fun getInsiteLogsForGroup(groupId: Long): Flow<List<GroupMessageLog>>
     fun getCompletedLogsForGroup(groupId: Long): Flow<List<GroupMessageLog>>
-    suspend fun sendBroadcastMessageToGroup(groupId: Long, messageText: String)
+    suspend fun sendBroadcastMessageToGroup(groupId: Long, messageText: String, onProgress: ((sent: Int, total: Int) -> Unit)? = null)
 }
+
+/**
+ * واجهة مستودع إعدادات تنسيق وتوسيم جهات الاتصال عند الحفظ.
+ */
+interface ContactFormattingRepository {
+    fun getSettings(): Flow<ContactFormattingSettings>
+    suspend fun updateSettings(settings: ContactFormattingSettings)
+}
+
 
 

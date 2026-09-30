@@ -55,8 +55,11 @@ enum class PatternType {
  * إجراء يُنفَّذ عند تطابق القاعدة.
  */
 sealed class RuleAction {
-    /** إرسال رد نصي ثابت */
+    /** إرسال رد نصي فقط دون حفظ جهة اتصال */
     data class SendReply(val message: String) : RuleAction()
+
+    /** استخراج الاسم وحفظ جهة الاتصال في الهاتف ثم إرسال الرد التلقائي */
+    data class SaveContactAndReply(val replyMessage: String) : RuleAction()
 }
 
 /**
@@ -201,5 +204,40 @@ data class GroupWithMembers(
     val group: Group,
     val members: List<GroupMember>
 )
+
+/**
+ * إعدادات تنسيق وتوسيم أسماء جهات الاتصال التلقائية عند الحفظ في دفتر الهاتف.
+ */
+data class ContactFormattingSettings(
+    val isEnabled: Boolean = false,
+    val customPrefix: String = "",
+    val prefix: String = "",
+    val suffix: String = "",
+    val customTag: String = "",
+    val customEmoji: String = ""
+) {
+    /**
+     * تشكيل وتنسيق الاسم ليتم حفظه في دفتر جهات اتصال الهاتف الفعلي (ContactsContract).
+     */
+    fun formatForPhonebook(rawName: String): String {
+        if (!isEnabled) return rawName.trim()
+        val cp = customPrefix.trim()
+        val p = prefix.trim()
+        val s = suffix.trim()
+        val tag = customTag.trim()
+        val emoji = customEmoji.trim()
+
+        val parts = mutableListOf<String>()
+        if (cp.isNotEmpty()) parts.add(cp)
+        if (p.isNotEmpty()) parts.add(p)
+        parts.add(rawName.trim())
+        if (tag.isNotEmpty()) parts.add(tag)
+        if (s.isNotEmpty()) parts.add(s)
+        if (emoji.isNotEmpty()) parts.add(emoji)
+
+        return parts.joinToString(" ").trim().ifBlank { rawName.trim() }
+    }
+}
+
 
 

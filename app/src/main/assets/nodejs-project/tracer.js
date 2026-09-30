@@ -143,12 +143,11 @@ export function printTimelineReport(traceIdOrStatusId) {
         ['05', 'DISPATCHER'],
         ['06', 'REACTION_BUILD'],
         ['07', 'BAILEYS_SEND'],
-        ['08', 'STANZA_BUILD'],
-        ['09', 'ENCRYPTION'],
-        ['10', 'WEBSOCKET_WRITE'],
-        ['11', 'WHATSAPP_ACK'],
-        ['12', 'DELIVERY'],
-        ['13', 'FINAL_RESULT']
+        ['08', 'BAILEYS_SEND_RETURN'],
+        ['09', 'WEBSOCKET_FRAME_OUT'],
+        ['10', 'WHATSAPP_ACK_RECEIVED'],
+        ['11', 'DELIVERY_RECEIPT'],
+        ['12', 'FINAL_RESULT']
     ];
 
     let firstFailure = 'NONE';

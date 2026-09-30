@@ -77,6 +77,29 @@ open class DeviceContactsManager {
         _contactsUpdateTrigger.value = System.currentTimeMillis()
     }
 
+    /**
+     * إرسال طلب إجبار مزامنة لحساب واتساب لتحديث جهات الاتصال فوراً في واتساب.
+     */
+    fun requestWhatsAppAccountSync() {
+        val ctx = context ?: return
+        try {
+            val accountManager = android.accounts.AccountManager.get(ctx)
+            val accounts = accountManager.accounts
+            for (acc in accounts) {
+                if (acc.type.contains("whatsapp", ignoreCase = true)) {
+                    val bundle = android.os.Bundle().apply {
+                        putBoolean(android.content.ContentResolver.SYNC_EXTRAS_MANUAL, true)
+                        putBoolean(android.content.ContentResolver.SYNC_EXTRAS_EXPEDITED, true)
+                    }
+                    android.content.ContentResolver.requestSync(acc, ContactsContract.AUTHORITY, bundle)
+                    logContactDiagnostic("[Contacts] Triggered WhatsApp Account Sync for: ${acc.name}")
+                }
+            }
+        } catch (e: Throwable) {
+            logContactDiagnostic("[Contacts] Failed to trigger WhatsApp sync: ${e.message}")
+        }
+    }
+
     private fun initObserver() {
         val ctx = context ?: return
         try {
@@ -186,18 +209,14 @@ open class DeviceContactsManager {
      * فحص ما إذا كان الرقم مسجلاً مسبقاً وله اسم معتمد في:
      * 1. دفتر جهات اتصال الهاتف المحلي (Device Local / SIM)
      * 2. حساب جيميل (Google Contacts)
-     * 3. جهات اتصال واتساب المحفوظة داخلياً (WhatsApp Saved Contacts)
+     * لا يُعتمد على أي كاش سحابي أو رسائل غير مسجلة في دفتر الهاتف.
      * إذا كان الشخص مسجلاً: ممنوع تعديل اسمه أو إعادة حفظه برقم عشوائي حتى لو أرسل رسالة "سجلني ...".
      */
     open fun isContactAlreadyRegistered(phoneNumber: String): Boolean {
         val cleanDigits = phoneNumber.replace("[^0-9]".toRegex(), "")
         if (cleanDigits.length < 7) return false
 
-        // 1. فحص جهات اتصال واتساب المحفوظة
-        val waName = getWhatsAppSavedName(phoneNumber)
-        if (isValidDisplayName(waName)) return true
-
-        // 2. فحص دليل هاتف أندرويد وحساب Google
+        // فحص دليل هاتف أندرويد وحساب Google فقط
         if (!hasReadPermission()) return false
         val formatted = normalizePhoneNumber(phoneNumber)
         val name1 = getContactDisplayName(formatted)
@@ -303,6 +322,10 @@ open class DeviceContactsManager {
                 false
             }
 
+            if (verified) {
+                requestWhatsAppAccountSync()
+            }
+
             val saveStatus = if (verified) "SUCCESS" else "FAILED"
             val logMessage = "[Contacts] Write permission: $permStatus, Saved to Phone: $saveStatus"
             logContactDiagnostic(logMessage)
@@ -322,6 +345,7 @@ open class DeviceContactsManager {
      * درع منع تكرار وانتحال جهات الاتصال (Anti-Duplication Shield):
      * إذا كان الرقم أو الحساب مسجلاً مسبقاً، يتم تحديث الاسم في سجل الهاتف بدلاً من ملء دفتر الهاتف بجهات اتصال مكررة.
      * إذا كان جديداً، يتم إنشاؤه لأول مرة.
+     * التحقق الصارم (Strict Device-First): لا يعود بـ true إلا بعد التأكد من تسجيله الفعلي في قاعدة جهات اتصال الهاتف.
      */
     open fun saveOrUpdateContact(name: String, phoneNumber: String): Boolean {
         if (isLid(phoneNumber)) {
@@ -346,25 +370,38 @@ open class DeviceContactsManager {
         val existingRawContactId = findRawContactIdByPhone(formattedPhone)
             ?: findRawContactIdByPhone(cleanDigits)
 
-        return if (existingRawContactId != null) {
+        val operationSuccess = if (existingRawContactId != null) {
             val updated = updateContactName(existingRawContactId, cleanName)
-            if (updated) {
-                whatsAppSavedContacts[cleanDigits] = cleanName
-                whatsAppSavedContacts[formattedPhone.replace("+", "")] = cleanName
-            }
-            logContactDiagnostic("[Contacts] Anti-Duplication Shield: Updated existing contact #$existingRawContactId name to \"$cleanName\" for $formattedPhone (Success: $updated)")
-            notifyContactsChanged()
+            logContactDiagnostic("[Contacts] Anti-Duplication Shield: Updated existing contact #$existingRawContactId name to \"$cleanName\" for $formattedPhone (Operation: $updated)")
             updated
         } else {
             val created = createNewContact(cleanName, formattedPhone)
-            if (created) {
-                whatsAppSavedContacts[cleanDigits] = cleanName
-                whatsAppSavedContacts[formattedPhone.replace("+", "")] = cleanName
-            }
-            logContactDiagnostic("[Contacts] Anti-Duplication Shield: Created new contact \"$cleanName\" for $formattedPhone (Success: $created)")
-            notifyContactsChanged()
+            logContactDiagnostic("[Contacts] Anti-Duplication Shield: Created new contact \"$cleanName\" for $formattedPhone (Operation: $created)")
             created
         }
+
+        notifyContactsChanged()
+
+        // التحقق الفعلي الصارم من قاعدة جهات اتصال أندرويد
+        val isVerifiedInPhonebook = operationSuccess && try {
+            isPhoneAlreadySaved(formattedPhone) ||
+            isPhoneAlreadySaved(cleanDigits) ||
+            getContactDisplayName(formattedPhone) != null ||
+            getContactDisplayName(cleanDigits) != null
+        } catch (_: Throwable) {
+            false
+        }
+
+        if (isVerifiedInPhonebook) {
+            whatsAppSavedContacts[cleanDigits] = cleanName
+            whatsAppSavedContacts[formattedPhone.replace("+", "")] = cleanName
+            requestWhatsAppAccountSync()
+            logContactDiagnostic("[Contacts] Strict Device-First: Contact \"$cleanName\" verified in Android Phonebook for $formattedPhone (SUCCESS).")
+        } else {
+            logContactDiagnostic("[Contacts] Strict Device-First: Contact \"$cleanName\" failed phonebook verification for $formattedPhone (FAILED).")
+        }
+
+        return isVerifiedInPhonebook
     }
 
     /**
@@ -513,14 +550,10 @@ open class DeviceContactsManager {
             }
         }
 
-        // فحص جهات اتصال واتساب المحفوظة داخلياً
-        val waSavedName = getWhatsAppSavedName(phoneNumber)
-
-        // إرجاع النتيجة بالأولوية الصارمة (الهاتف ثم جيميل ثم جهات اتصال واتساب المحفوظة)
+        // إرجاع النتيجة بالأولوية الصارمة (دليل هاتف الجهاز الأساسي ثم حساب Google فقط)
         val resolution = when {
             deviceLocalCandidate != null -> ContactResolution(deviceLocalCandidate!!, ContactSourcePriority.DEVICE_LOCAL)
             gmailCandidate != null -> ContactResolution(gmailCandidate!!, ContactSourcePriority.GMAIL)
-            waSavedName != null -> ContactResolution(waSavedName, ContactSourcePriority.WHATSAPP)
             else -> null
         }
         if (resolution != null) {

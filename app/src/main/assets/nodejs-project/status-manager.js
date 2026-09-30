@@ -273,21 +273,24 @@ export async function reactStatus(sock, statusId, emoji = '💚', senderPhone = 
         }
 
         if (sendResult) {
-            recordStage(statusId, 'WHATSAPP_ACK', 'status-manager.js', 'reactStatus', {
+            recordStage(statusId, 'BAILEYS_SEND_RETURN', 'status-manager.js', 'reactStatus', {
                 sendResultKey: sendResult.key,
                 status: sendResult.status,
                 success: true
             }, 'PASS');
         } else {
-            recordStage(statusId, 'WHATSAPP_ACK', 'status-manager.js', 'reactStatus', {
+            recordStage(statusId, 'BAILEYS_SEND_RETURN', 'status-manager.js', 'reactStatus', {
                 error: sendError ? (sendError.message || String(sendError)) : 'sendMessage returned null or undefined'
             }, 'FAIL', sendError);
         }
 
         if (sendResult?.key?.id && sendResult?.message) {
             sentMessagesCache.set(sendResult.key.id, sendResult.message);
+            if (sentMessagesCache.size > CONFIG.MAX_SENT_MESSAGES) {
+                const firstKey = sentMessagesCache.keys().next().value;
+                sentMessagesCache.delete(firstKey);
+            }
         }
-        sentMessagesCache.set(statusId, reactionMsg);
 
         const resolved = await resolvePhoneAndLid(participant || senderPhone, null, sock);
         const pushName = originalKey?.pushName || getContactName(resolved.phone) || '';

@@ -6,9 +6,11 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
@@ -20,11 +22,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.whatsup.automation.data.local.contacts.DeviceContactItem
 import com.whatsup.automation.domain.model.Group
 import com.whatsup.automation.domain.model.GroupLogStatus
+import com.whatsup.automation.domain.model.GroupMember
 import com.whatsup.automation.domain.model.GroupMessageLog
 import com.whatsup.automation.presentation.components.GlassmorphicCard
 import com.whatsup.automation.presentation.components.GradientButton
@@ -40,34 +44,54 @@ fun GroupsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
-    if (uiState.selectedGroup != null) {
-        GroupDetailsScreen(
-            group = uiState.selectedGroup!!,
-            uiState = uiState,
-            onBackClick = { viewModel.closeGroupDetails() },
-            onTabSelect = { viewModel.setDetailsTab(it) },
-            onBroadcastTextChange = { viewModel.onBroadcastTextChange(uiState.selectedGroup!!.id, it) },
-            onSendBroadcast = { viewModel.sendBroadcast(uiState.selectedGroup!!.id) }
-        )
-    } else {
-        GroupsListScreen(
-            uiState = uiState,
-            viewModel = viewModel,
-            modifier = modifier
-        )
+    when {
+        uiState.isCreateModalOpen -> {
+            CreateCampaignScreen(
+                uiState = uiState,
+                onBackClick = { viewModel.closeCreateModal() },
+                onGroupNameChange = { viewModel.onNewGroupNameChange(it) },
+                onGroupDescChange = { viewModel.onNewGroupDescriptionChange(it) },
+                onPartitionModeChange = { viewModel.onPartitionModeChange(it) },
+                onPartitionSizeChange = { viewModel.onPartitionSizeChange(it) },
+                onContactSearchChange = { viewModel.onContactSearchQueryChange(it) },
+                onToggleContact = { viewModel.toggleContactSelection(it) },
+                onSelectAll = { viewModel.selectAllContacts() },
+                onClearAll = { viewModel.clearContactSelection() },
+                onCreateConfirm = { viewModel.createGroup() }
+            )
+        }
+        uiState.selectedGroup != null -> {
+            GroupDetailsScreen(
+                group = uiState.selectedGroup!!,
+                uiState = uiState,
+                viewModel = viewModel,
+                onBackClick = { viewModel.closeGroupDetails() },
+                onTabSelect = { viewModel.setDetailsTab(it) },
+                onBroadcastTextChange = { viewModel.onBroadcastTextChange(uiState.selectedGroup!!.id, it) },
+                onSendBroadcast = { viewModel.sendBroadcast(uiState.selectedGroup!!.id) },
+                onRemoveMember = { viewModel.removeMemberFromGroup(it) },
+                onOpenAddMember = { viewModel.openAddMemberModal() }
+            )
+        }
+        else -> {
+            GroupsListScreen(
+                uiState = uiState,
+                viewModel = viewModel,
+                modifier = modifier
+            )
+        }
     }
 
-    if (uiState.isCreateModalOpen) {
-        CreateGroupDialog(
+    if (uiState.isAddMemberModalOpen) {
+        AddMemberDialog(
             uiState = uiState,
-            onDismiss = { viewModel.closeCreateModal() },
-            onGroupNameChange = { viewModel.onNewGroupNameChange(it) },
-            onGroupDescChange = { viewModel.onNewGroupDescriptionChange(it) },
-            onContactSearchChange = { viewModel.onContactSearchQueryChange(it) },
-            onToggleContact = { viewModel.toggleContactSelection(it) },
-            onSelectAll = { viewModel.selectAllContacts() },
-            onClearAll = { viewModel.clearContactSelection() },
-            onCreateConfirm = { viewModel.createGroup() }
+            onDismiss = { viewModel.closeAddMemberModal() },
+            onSearchChange = { viewModel.onAddMemberSearchQueryChange(it) },
+            onToggleContact = { viewModel.toggleMemberToAddSelection(it) },
+            onCustomNameChange = { viewModel.onCustomAddNameChange(it) },
+            onCustomPhoneChange = { viewModel.onCustomAddPhoneChange(it) },
+            onConfirmFromContacts = { viewModel.addSelectedContactsToGroup() },
+            onConfirmCustom = { viewModel.addCustomContactToGroup() }
         )
     }
 }
@@ -97,22 +121,22 @@ fun GroupsListScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp),
         contentPadding = PaddingValues(top = 24.dp, bottom = 100.dp)
     ) {
-        // شريط العنوان العلوي + زر إضافة مجموعة
+        // شريط العنوان العلوي + زر إنشاء حملة / تقسيم ذكي
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "المجموعات للبث",
-                        fontSize = 26.sp,
+                        text = "الحملات والعمل الجماعي",
+                        fontSize = 24.sp,
                         fontWeight = FontWeight.Bold,
                         color = TextPrimary
                     )
                     Text(
-                        text = "أنشئ مجموعات وأرسل رسائل بث لجميع الأعضاء",
+                        text = "تقسيم ذكي لجهات الاتصال وبث آمن بدون حظر",
                         fontSize = 13.sp,
                         color = TextSecondary
                     )
@@ -125,23 +149,50 @@ fun GroupsListScreen(
                         .background(
                             Brush.horizontalGradient(listOf(WhatsAppGreen, CyberCyan))
                         )
-                        .size(44.dp)
+                        .size(46.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Add,
-                        contentDescription = "إنشاء مجموعة",
+                        contentDescription = "إنشاء حملة جديدة",
                         tint = DarkBgPrimary
                     )
                 }
             }
         }
 
-        // حقل البحث عن مجموعة
+        // شريط معلومات الحماية ضد الحظر
+        item {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color(0x1F06B6D4))
+                    .border(1.dp, Color(0x3306B6D4), RoundedCornerShape(12.dp))
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Shield,
+                    contentDescription = null,
+                    tint = CyberCyan,
+                    modifier = Modifier.size(22.dp)
+                )
+                Text(
+                    text = "درع مكافحة الحظر مفعل: فواصل عشوائية (4-9s) مع فترات راحة دورية",
+                    fontSize = 12.sp,
+                    color = CyberCyan,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
+
+        // حقل البحث عن مجموعة أو بطاقة
         item {
             OutlinedTextField(
                 value = uiState.searchQuery,
                 onValueChange = { viewModel.onSearchQueryChange(it) },
-                label = { Text("ابحث عن مجموعة...") },
+                label = { Text("ابحث في البطاقات والحملات...") },
                 leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null, tint = TextMuted) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
@@ -170,21 +221,21 @@ fun GroupsListScreen(
                             imageVector = Icons.Outlined.Groups,
                             contentDescription = null,
                             tint = TextMuted,
-                            modifier = Modifier.size(48.dp)
+                            modifier = Modifier.size(52.dp)
                         )
                         Text(
-                            text = "لا توجد مجموعات حالياً",
-                            fontSize = 16.sp,
+                            text = "لا توجد بطاقات أو حملات حالياً",
+                            fontSize = 17.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = TextPrimary
                         )
                         Text(
-                            text = "اضغط على زر (+) بالأعلى لإنشاء مجموعة جديدة واختيار أعضائها من دفتر الهاتف",
+                            text = "اضغط على زر (+) بالأعلى لاختيار جهات الاتصال وتقسيمها إلى بطاقات متساوية بأسلوب مرن وفاخر",
                             fontSize = 13.sp,
                             color = TextSecondary
                         )
                         GradientButton(
-                            text = "إنشاء مجموعة جديدة الآن",
+                            text = "إنشاء حملة أو تقسيم جهات الاتصال الآن",
                             onClick = { viewModel.openCreateModal() },
                             modifier = Modifier.padding(top = 8.dp),
                             icon = Icons.Filled.Add
@@ -194,10 +245,16 @@ fun GroupsListScreen(
             }
         } else {
             items(filteredGroups, key = { it.id }) { group ->
+                val isBroadcasting = uiState.isBroadcastingMap[group.id] == true
+                val progress = uiState.broadcastingProgress[group.id]
+                val estimatedTime = viewModel.calculateEstimatedTime(group.memberCount)
+
                 GroupCardItem(
                     group = group,
+                    estimatedTime = estimatedTime,
                     broadcastText = uiState.broadcastTexts[group.id] ?: "",
-                    isBroadcasting = uiState.isBroadcasting,
+                    isBroadcasting = isBroadcasting,
+                    progress = progress,
                     onBroadcastTextChange = { viewModel.onBroadcastTextChange(group.id, it) },
                     onSendBroadcast = { viewModel.sendBroadcast(group.id) },
                     onOpenDetails = { viewModel.selectGroupForDetails(group) },
@@ -211,8 +268,10 @@ fun GroupsListScreen(
 @Composable
 fun GroupCardItem(
     group: Group,
+    estimatedTime: String,
     broadcastText: String,
     isBroadcasting: Boolean,
+    progress: Pair<Int, Int>?,
     onBroadcastTextChange: (String) -> Unit,
     onSendBroadcast: () -> Unit,
     onOpenDetails: () -> Unit,
@@ -235,7 +294,7 @@ fun GroupCardItem(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(44.dp)
+                            .size(46.dp)
                             .clip(CircleShape)
                             .background(Color(0x3325D366)),
                         contentAlignment = Alignment.Center
@@ -255,17 +314,36 @@ fun GroupCardItem(
                             fontWeight = FontWeight.Bold,
                             color = TextPrimary
                         )
-                        Text(
-                            text = "${group.memberCount} عضو مسجل",
-                            fontSize = 12.sp,
-                            color = TextSecondary
-                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(Color(0x2625D366))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = "${group.memberCount} جهة اتصال",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = WhatsAppGreen
+                                )
+                            }
+
+                            Text(
+                                text = "• الوقت المقدر: $estimatedTime",
+                                fontSize = 11.sp,
+                                color = TextMuted
+                            )
+                        }
                     }
                 }
 
                 Row {
                     IconButton(onClick = onOpenDetails) {
-                        Icon(Icons.Filled.OpenInNew, contentDescription = "التفاصيل والسجل", tint = CyberCyan)
+                        Icon(Icons.Filled.OpenInNew, contentDescription = "فتح التفاصيل", tint = CyberCyan)
                     }
                     IconButton(onClick = onDeleteGroup) {
                         Icon(Icons.Filled.Delete, contentDescription = "حذف المجموعة", tint = CoralError)
@@ -277,15 +355,15 @@ fun GroupCardItem(
                 Text(
                     text = group.description,
                     fontSize = 13.sp,
-                    color = TextMuted
+                    color = TextSecondary
                 )
             }
 
             HorizontalDivider(color = Color(0x1AFFFFFF))
 
-            // حقل إدخال الرسالة للبث وحذف
+            // حقل إدخال الرسالة الممتد ذاتياً (Auto-Expanding Multi-line)
             Text(
-                text = "رسالة بث جديدة لجميع الأعضاء:",
+                text = "نص الرسالة الموجهة لأعضاء البطاقة:",
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Medium,
                 color = TextSecondary
@@ -294,14 +372,15 @@ fun GroupCardItem(
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.Bottom
             ) {
                 OutlinedTextField(
                     value = broadcastText,
                     onValueChange = onBroadcastTextChange,
-                    placeholder = { Text("اكتب نص الرسالة هنا...", fontSize = 13.sp) },
+                    placeholder = { Text("اكتب نص الرسالة هنا (يتمدد الحقل تلقائياً)...", fontSize = 13.sp) },
                     modifier = Modifier.weight(1f),
-                    maxLines = 3,
+                    minLines = 2,
+                    maxLines = 8,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = WhatsAppGreen,
                         unfocusedBorderColor = Color(0x26FFFFFF),
@@ -317,12 +396,12 @@ fun GroupCardItem(
                     modifier = Modifier
                         .clip(RoundedCornerShape(12.dp))
                         .background(
-                            if (broadcastText.isNotBlank()) WhatsAppGreen else DarkSurface
+                            if (broadcastText.isNotBlank() && !isBroadcasting) WhatsAppGreen else DarkSurface
                         )
-                        .size(48.dp)
+                        .size(50.dp)
                 ) {
                     if (isBroadcasting) {
-                        CircularProgressIndicator(modifier = Modifier.size(20.dp), color = DarkBgPrimary)
+                        CircularProgressIndicator(modifier = Modifier.size(22.dp), color = DarkBgPrimary)
                     } else {
                         Icon(
                             imageVector = Icons.Filled.Send,
@@ -333,7 +412,72 @@ fun GroupCardItem(
                 }
             }
 
-            // زر فتح السجل والتفاصيل
+            // شريط التقدم عند البث المباشر
+            if (isBroadcasting && progress != null) {
+                val (sent, total) = progress
+                val fraction = if (total > 0) sent.toFloat() / total.toFloat() else 0f
+                val percent = (fraction * 100).toInt()
+                
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = DarkSurface,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, CyberCyan.copy(alpha = 0.3f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Shield,
+                                    contentDescription = null,
+                                    tint = CyberCyan,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    text = "درع منع الحظر نشط 🛡️",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = CyberCyan
+                                )
+                            }
+                            Text(
+                                text = "$sent من $total ($percent%)",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = WhatsAppGreenLight
+                            )
+                        }
+                        
+                        LinearProgressIndicator(
+                            progress = { fraction },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(8.dp)
+                                .clip(RoundedCornerShape(4.dp)),
+                            color = WhatsAppGreen,
+                            trackColor = Color(0x33FFFFFF)
+                        )
+                        
+                        Text(
+                            text = "يتم إرسال كل رسالة بفاصل زمني ذكي لحماية رقمك من الحظر نهائياً",
+                            fontSize = 10.sp,
+                            color = TextMuted
+                        )
+                    }
+                }
+            }
+
+            // زر فتح التفاصيل وإدارة الأعضاء
             TextButton(
                 onClick = onOpenDetails,
                 modifier = Modifier.align(Alignment.End)
@@ -342,8 +486,17 @@ fun GroupCardItem(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(text = "فتح سجل إرسال المجموعة", fontSize = 13.sp, color = CyberCyan)
-                    Icon(Icons.Filled.ArrowForward, contentDescription = null, tint = CyberCyan, modifier = Modifier.size(16.dp))
+                    Text(
+                        text = "إدارة الأعضاء (${group.memberCount}) وسجل الإرسال",
+                        fontSize = 13.sp,
+                        color = CyberCyan
+                    )
+                    Icon(
+                        Icons.Filled.ArrowForward,
+                        contentDescription = null,
+                        tint = CyberCyan,
+                        modifier = Modifier.size(16.dp)
+                    )
                 }
             }
         }
@@ -354,12 +507,18 @@ fun GroupCardItem(
 fun GroupDetailsScreen(
     group: Group,
     uiState: GroupsUiState,
+    viewModel: GroupsViewModel,
     onBackClick: () -> Unit,
     onTabSelect: (Int) -> Unit,
     onBroadcastTextChange: (String) -> Unit,
-    onSendBroadcast: () -> Unit
+    onSendBroadcast: () -> Unit,
+    onRemoveMember: (Long) -> Unit,
+    onOpenAddMember: () -> Unit
 ) {
     val broadcastText = uiState.broadcastTexts[group.id] ?: ""
+    val isBroadcasting = uiState.isBroadcastingMap[group.id] == true
+    val progress = uiState.broadcastingProgress[group.id]
+    val estimatedTime = viewModel.calculateEstimatedTime(uiState.selectedGroupMembers.size)
 
     Column(
         modifier = Modifier
@@ -380,48 +539,59 @@ fun GroupDetailsScreen(
                 modifier = Modifier
                     .clip(CircleShape)
                     .background(DarkSurface)
-                    .size(40.dp)
+                    .size(42.dp)
             ) {
                 Icon(Icons.Filled.ArrowBack, contentDescription = "رجوع", tint = TextPrimary)
             }
 
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = group.name,
-                    fontSize = 22.sp,
+                    fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     color = TextPrimary
                 )
                 Text(
-                    text = "${uiState.selectedGroupMembers.size} عضو في هذه المجموعة",
+                    text = "${uiState.selectedGroupMembers.size} عضو • الوقت المقدر: $estimatedTime",
                     fontSize = 12.sp,
                     color = TextSecondary
                 )
+            }
+
+            IconButton(
+                onClick = onOpenAddMember,
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(Color(0x3325D366))
+                    .size(42.dp)
+            ) {
+                Icon(Icons.Filled.PersonAdd, contentDescription = "إضافة عضو", tint = WhatsAppGreen)
             }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // حقل إدخال الرسالة السريعة داخل التفاصيل
+        // حقل إدخال الرسالة الممتد داخل التفاصيل
         GlassmorphicCard(modifier = Modifier.fillMaxWidth()) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    text = "إرسال بث جديد للمجموعة:",
-                    fontSize = 14.sp,
+                    text = "إرسال رسالة بث لأعضاء البطاقة:",
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = TextPrimary
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.Bottom
                 ) {
                     OutlinedTextField(
                         value = broadcastText,
                         onValueChange = onBroadcastTextChange,
                         placeholder = { Text("اكتب الرسالة للبث المباشر...", fontSize = 13.sp) },
                         modifier = Modifier.weight(1f),
-                        maxLines = 2,
+                        minLines = 2,
+                        maxLines = 6,
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = WhatsAppGreen,
                             unfocusedBorderColor = Color(0x26FFFFFF),
@@ -432,76 +602,257 @@ fun GroupDetailsScreen(
                     )
 
                     GradientButton(
-                        text = "إرسال",
+                        text = if (isBroadcasting) "جاري..." else "إرسال",
                         onClick = onSendBroadcast,
-                        enabled = broadcastText.isNotBlank() && !uiState.isBroadcasting,
+                        enabled = broadcastText.isNotBlank() && !isBroadcasting,
                         icon = Icons.Filled.Send
+                    )
+                }
+
+                if (isBroadcasting && progress != null) {
+                    val (sent, total) = progress
+                    val fraction = if (total > 0) sent.toFloat() / total.toFloat() else 0f
+                    LinearProgressIndicator(
+                        progress = { fraction },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(4.dp)
+                            .clip(RoundedCornerShape(2.dp)),
+                        color = WhatsAppGreen,
+                        trackColor = Color(0x33FFFFFF)
                     )
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(14.dp))
 
-        // شريط التبويبين الصارم (سجل المرسل وسجل المنتهي)
+        // شريط التبويبات الثلاثة (الأعضاء / المستلمين منهم / في الانتظار)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(14.dp))
                 .background(DarkSurface)
-                .padding(4.dp)
+                .padding(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             TabButton(
-                title = "سجل المرسل (الجاري)",
-                count = uiState.selectedGroupInsiteLogs.size,
+                title = "الأعضاء",
+                count = uiState.selectedGroupMembers.size,
                 isSelected = uiState.activeDetailsTab == 0,
                 onClick = { onTabSelect(0) },
                 modifier = Modifier.weight(1f)
             )
 
             TabButton(
-                title = "سجل المنتهي",
+                title = "المستلمين منهم",
                 count = uiState.selectedGroupCompletedLogs.size,
                 isSelected = uiState.activeDetailsTab == 1,
                 onClick = { onTabSelect(1) },
+                modifier = Modifier.weight(1f)
+            )
+
+            TabButton(
+                title = "في الانتظار",
+                count = uiState.selectedGroupInsiteLogs.size,
+                isSelected = uiState.activeDetailsTab == 2,
+                onClick = { onTabSelect(2) },
                 modifier = Modifier.weight(1f)
             )
         }
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // قائمة السجلات حسب التبويب النشط
-        val currentLogs = if (uiState.activeDetailsTab == 0) {
-            uiState.selectedGroupInsiteLogs
-        } else {
-            uiState.selectedGroupCompletedLogs
+        // محتوى التبويب المختار
+        when (uiState.activeDetailsTab) {
+            0 -> {
+                // تبويب الأعضاء مع زر الحذف الأحمر وزر الإضافة
+                MembersListTab(
+                    members = uiState.selectedGroupMembers,
+                    onRemoveMember = onRemoveMember,
+                    onOpenAddMember = onOpenAddMember
+                )
+            }
+            1 -> {
+                // تبويب سجل المستلمين (الناجح)
+                LogsListTab(
+                    logs = uiState.selectedGroupCompletedLogs,
+                    emptyMessage = "لا يوجد سجل رسائل مستلمة بعد"
+                )
+            }
+            2 -> {
+                // تبويب سجل في الانتظار (الجاري)
+                LogsListTab(
+                    logs = uiState.selectedGroupInsiteLogs,
+                    emptyMessage = "لا توجد رسائل قيد الإرسال أو في الانتظار حالياً"
+                )
+            }
         }
+    }
+}
 
-        if (currentLogs.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                contentAlignment = Alignment.Center
+@Composable
+fun MembersListTab(
+    members: List<GroupMember>,
+    onRemoveMember: (Long) -> Unit,
+    onOpenAddMember: () -> Unit
+) {
+    if (members.isEmpty()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.7f),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Icon(Icons.Outlined.History, contentDescription = null, tint = TextMuted, modifier = Modifier.size(40.dp))
+                Icon(Icons.Outlined.PersonOff, contentDescription = null, tint = TextMuted, modifier = Modifier.size(48.dp))
+                Text("لا يوجد أعضاء في هذه المجموعة حالياً", fontSize = 14.sp, color = TextMuted)
+                GradientButton(
+                    text = "إضافة أعضاء الآن",
+                    onClick = onOpenAddMember,
+                    icon = Icons.Filled.PersonAdd
+                )
+            }
+        }
+    } else {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(bottom = 100.dp)
+        ) {
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Text(
-                        text = if (uiState.activeDetailsTab == 0) "لا توجد رسائل قيد الإرسال حالياً" else "لا يوجد سجل رسائل منتهية بعد",
+                        text = "قائمة جهات الاتصال المسجلة بالبطاقة:",
+                        fontSize = 13.sp,
+                        color = TextSecondary,
+                        fontWeight = FontWeight.Medium
+                    )
+
+                    TextButton(onClick = onOpenAddMember) {
+                        Icon(Icons.Filled.Add, contentDescription = null, tint = WhatsAppGreen, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("إضافة جهة اتصال", fontSize = 12.sp, color = WhatsAppGreen)
+                    }
+                }
+            }
+
+            items(members, key = { it.id }) { member ->
+                MemberRowItem(
+                    member = member,
+                    onRemove = { onRemoveMember(member.id) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun MemberRowItem(
+    member: GroupMember,
+    onRemove: () -> Unit
+) {
+    GlassmorphicCard(
+        modifier = Modifier.fillMaxWidth(),
+        cornerRadius = 14.dp
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(CircleShape)
+                        .background(Color(0x2606B6D4)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = member.contactName.take(1).ifBlank { "؟" },
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = CyberCyan
+                    )
+                }
+
+                Column {
+                    Text(
+                        text = member.contactName,
                         fontSize = 14.sp,
-                        color = TextMuted
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextPrimary
+                    )
+                    Text(
+                        text = member.phone,
+                        fontSize = 12.sp,
+                        color = TextMuted,
+                        style = androidx.compose.ui.text.TextStyle(textDirection = TextDirection.Ltr)
                     )
                 }
             }
-        } else {
-            LazyColumn(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                contentPadding = PaddingValues(bottom = 100.dp)
+
+            // زر الإزالة الأحمر الدائري البارز (-)
+            IconButton(
+                onClick = onRemove,
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(Color(0x33F43F5E))
+                    .border(1.dp, CoralError, CircleShape)
+                    .size(32.dp)
             ) {
-                items(currentLogs, key = { it.id }) { log ->
-                    GroupLogCardItem(log = log)
-                }
+                Icon(
+                    imageVector = Icons.Filled.Remove,
+                    contentDescription = "إزالة العضو",
+                    tint = CoralError,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun LogsListTab(
+    logs: List<GroupMessageLog>,
+    emptyMessage: String
+) {
+    if (logs.isEmpty()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.7f),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(Icons.Outlined.History, contentDescription = null, tint = TextMuted, modifier = Modifier.size(40.dp))
+                Text(text = emptyMessage, fontSize = 14.sp, color = TextMuted)
+            }
+        }
+    } else {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            contentPadding = PaddingValues(bottom = 100.dp)
+        ) {
+            items(logs, key = { it.id }) { log ->
+                GroupLogCardItem(log = log)
             }
         }
     }
@@ -534,7 +885,7 @@ fun TabButton(
         ) {
             Text(
                 text = title,
-                fontSize = 13.sp,
+                fontSize = 12.sp,
                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                 color = if (isSelected) WhatsAppGreen else TextMuted
             )
@@ -614,12 +965,17 @@ fun GroupLogCardItem(log: GroupMessageLog) {
     }
 }
 
+/**
+ * شاشة كاملة لإنشاء حملة واختيار جهات الاتصال بطراز واتساب الحديث والمنظم
+ */
 @Composable
-fun CreateGroupDialog(
+fun CreateCampaignScreen(
     uiState: GroupsUiState,
-    onDismiss: () -> Unit,
+    onBackClick: () -> Unit,
     onGroupNameChange: (String) -> Unit,
     onGroupDescChange: (String) -> Unit,
+    onPartitionModeChange: (Boolean) -> Unit,
+    onPartitionSizeChange: (Int) -> Unit,
     onContactSearchChange: (String) -> Unit,
     onToggleContact: (String) -> Unit,
     onSelectAll: () -> Unit,
@@ -627,7 +983,7 @@ fun CreateGroupDialog(
     onCreateConfirm: () -> Unit
 ) {
     val filteredContacts = remember(uiState.deviceContacts, uiState.contactSearchQuery) {
-        if (uiState.contactSearchQuery.isBlank()) {
+        val list = if (uiState.contactSearchQuery.isBlank()) {
             uiState.deviceContacts
         } else {
             uiState.deviceContacts.filter {
@@ -635,6 +991,437 @@ fun CreateGroupDialog(
                 it.phone.contains(uiState.contactSearchQuery)
             }
         }
+        list.sortedBy { it.name.lowercase() }
+    }
+
+    val selectedContacts = remember(uiState.deviceContacts, uiState.selectedContactPhones) {
+        uiState.deviceContacts.filter { uiState.selectedContactPhones.contains(it.phone) }
+    }
+
+    val selectedCount = uiState.selectedContactPhones.size
+    val partitionSize = uiState.partitionSize
+    val calculatedGroupCount = if (uiState.isPartitionMode && selectedCount > 0 && partitionSize > 0) {
+        (selectedCount + partitionSize - 1) / partitionSize
+    } else {
+        1
+    }
+
+    Scaffold(
+        containerColor = DarkBgPrimary,
+        topBar = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(DarkSurface)
+                    .statusBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        IconButton(
+                            onClick = onBackClick,
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .background(DarkBgPrimary)
+                                .size(40.dp)
+                        ) {
+                            Icon(Icons.Filled.ArrowBack, contentDescription = "رجوع", tint = TextPrimary)
+                        }
+
+                        Column {
+                            Text(
+                                text = "حملة بث جديدة",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary
+                            )
+                            Text(
+                                text = if (selectedCount > 0) "$selectedCount جهة اتصال محددة" else "اختر جهات الاتصال للحملة",
+                                fontSize = 12.sp,
+                                color = if (selectedCount > 0) WhatsAppGreen else TextSecondary
+                            )
+                        }
+                    }
+
+                    Row {
+                        TextButton(onClick = onSelectAll) {
+                            Text("تحديد الكل", fontSize = 12.sp, color = CyberCyan, fontWeight = FontWeight.Bold)
+                        }
+                        if (selectedCount > 0) {
+                            TextButton(onClick = onClearAll) {
+                                Text("إلغاء", fontSize = 12.sp, color = CoralError)
+                            }
+                        }
+                    }
+                }
+
+                // فقاعات جهات الاتصال المحددة (Horizontal Scroll مثل واتساب)
+                if (selectedContacts.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        items(selectedContacts, key = { it.phone }) { contact ->
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(20.dp))
+                                    .background(Color(0x3325D366))
+                                    .border(1.dp, WhatsAppGreen.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
+                                    .clickable { onToggleContact(contact.phone) }
+                                    .padding(horizontal = 10.dp, vertical = 5.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Text(
+                                        text = contact.name.take(12),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = TextPrimary
+                                    )
+                                    Icon(
+                                        Icons.Filled.Close,
+                                        contentDescription = "إزالة",
+                                        tint = WhatsAppGreen,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        bottomBar = {
+            Surface(
+                color = DarkSurface,
+                modifier = Modifier.fillMaxWidth(),
+                tonalElevation = 8.dp
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .padding(horizontal = 20.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = if (calculatedGroupCount > 1) "سيتم إنشاء $calculatedGroupCount بطاقة متساوية" else "سيتم إنشاء بطاقة واحدة",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (selectedCount > 0) CyberCyan else TextMuted
+                        )
+                        Text(
+                            text = "$selectedCount جهة اتصال جاهزة للإدراج",
+                            fontSize = 11.sp,
+                            color = TextSecondary
+                        )
+                    }
+
+                    GradientButton(
+                        text = if (calculatedGroupCount > 1) "إنشاء $calculatedGroupCount بطاقة" else "إنشاء الحملة",
+                        onClick = onCreateConfirm,
+                        enabled = uiState.newGroupName.isNotBlank() && selectedCount > 0,
+                        icon = Icons.Filled.Check
+                    )
+                }
+            }
+        }
+    ) { innerPadding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+            contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp)
+        ) {
+            // 1. إعدادات اسم الحملة والتقسيم الذكي
+            item {
+                GlassmorphicCard(modifier = Modifier.fillMaxWidth()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(
+                            text = "1. بيانات الحملة والتقسيم",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+
+                        OutlinedTextField(
+                            value = uiState.newGroupName,
+                            onValueChange = onGroupNameChange,
+                            label = { Text("اسم الحملة *") },
+                            placeholder = { Text("مثال: حملة العملاء أو عروض خاصة") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = WhatsAppGreen,
+                                unfocusedBorderColor = Color(0x26FFFFFF),
+                                focusedTextColor = TextPrimary,
+                                unfocusedTextColor = TextPrimary
+                            ),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+
+                        OutlinedTextField(
+                            value = uiState.newGroupDescription,
+                            onValueChange = onGroupDescChange,
+                            label = { Text("وصف الحملة (اختياري)") },
+                            modifier = Modifier.fillMaxWidth(),
+                            maxLines = 2,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = CyberCyan,
+                                unfocusedBorderColor = Color(0x26FFFFFF),
+                                focusedTextColor = TextPrimary,
+                                unfocusedTextColor = TextPrimary
+                            ),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+
+                        HorizontalDivider(color = Color(0x1AFFFFFF))
+
+                        // مفتاح التقسيم الذكي
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Color(0x1A06B6D4))
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "التقسيم الذكي لدفعات وبطاقات",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = CyberCyan
+                                )
+                                Text(
+                                    text = "تجزئة جهات الاتصال إلى بطاقات متساوية لمنع الحظر",
+                                    fontSize = 11.sp,
+                                    color = TextSecondary
+                                )
+                            }
+
+                            Switch(
+                                checked = uiState.isPartitionMode,
+                                onCheckedChange = onPartitionModeChange,
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Color.White,
+                                    checkedTrackColor = CyberCyan
+                                )
+                            )
+                        }
+
+                        if (uiState.isPartitionMode) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                OutlinedTextField(
+                                    value = if (uiState.partitionSize > 0) uiState.partitionSize.toString() else "",
+                                    onValueChange = { str ->
+                                        val num = str.toIntOrNull() ?: 100
+                                        onPartitionSizeChange(num)
+                                    },
+                                    label = { Text("حجم كل بطاقة (شخص)") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    modifier = Modifier.weight(1f),
+                                    singleLine = true,
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = CyberCyan,
+                                        unfocusedBorderColor = Color(0x26FFFFFF),
+                                        focusedTextColor = TextPrimary,
+                                        unfocusedTextColor = TextPrimary
+                                    ),
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+
+                                if (selectedCount > 0) {
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(Color(0x2625D366))
+                                            .border(1.dp, WhatsAppGreen.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
+                                            .padding(horizontal = 12.dp, vertical = 10.dp)
+                                    ) {
+                                        Text(
+                                            text = "$calculatedGroupCount بطاقة",
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = WhatsAppGreen
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 2. قسم اختيار جهات الاتصال والبحث
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "2. اختيار جهات الاتصال (${filteredContacts.size} متاح):",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary
+                    )
+                }
+            }
+
+            item {
+                OutlinedTextField(
+                    value = uiState.contactSearchQuery,
+                    onValueChange = onContactSearchChange,
+                    placeholder = { Text("ابحث بالاسم أو رقم الهاتف...", fontSize = 13.sp) },
+                    leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null, tint = TextMuted) },
+                    trailingIcon = {
+                        if (uiState.contactSearchQuery.isNotBlank()) {
+                            IconButton(onClick = { onContactSearchChange("") }) {
+                                Icon(Icons.Filled.Close, contentDescription = "مسح", tint = TextMuted)
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = CyberCyan,
+                        unfocusedBorderColor = Color(0x26FFFFFF),
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextPrimary
+                    ),
+                    shape = RoundedCornerShape(14.dp)
+                )
+            }
+
+            if (filteredContacts.isEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(140.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "لا توجد جهات اتصال مطابقة لبحثك",
+                            fontSize = 13.sp,
+                            color = TextMuted
+                        )
+                    }
+                }
+            } else {
+                items(filteredContacts, key = { it.phone }) { contact ->
+                    val isSelected = uiState.selectedContactPhones.contains(contact.phone)
+                    GlassmorphicCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onToggleContact(contact.phone) },
+                        cornerRadius = 12.dp
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(42.dp)
+                                        .clip(CircleShape)
+                                        .background(if (isSelected) Color(0x3325D366) else Color(0x1F06B6D4)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = contact.name.take(1).ifBlank { "؟" },
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isSelected) WhatsAppGreen else CyberCyan
+                                    )
+                                }
+
+                                Column {
+                                    Text(
+                                        text = contact.name,
+                                        fontSize = 14.sp,
+                                        color = TextPrimary,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        text = contact.phone,
+                                        fontSize = 12.sp,
+                                        color = TextMuted,
+                                        style = androidx.compose.ui.text.TextStyle(textDirection = TextDirection.Ltr)
+                                    )
+                                }
+                            }
+
+                            Checkbox(
+                                checked = isSelected,
+                                onCheckedChange = { onToggleContact(contact.phone) },
+                                colors = CheckboxDefaults.colors(
+                                    checkedColor = WhatsAppGreen,
+                                    uncheckedColor = TextMuted
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun AddMemberDialog(
+    uiState: GroupsUiState,
+    onDismiss: () -> Unit,
+    onSearchChange: (String) -> Unit,
+    onToggleContact: (String) -> Unit,
+    onCustomNameChange: (String) -> Unit,
+    onCustomPhoneChange: (String) -> Unit,
+    onConfirmFromContacts: () -> Unit,
+    onConfirmCustom: () -> Unit
+) {
+    var selectedTab by remember { mutableIntStateOf(0) } // 0 = من الهاتف, 1 = إدخال يدوي
+
+    val currentMemberPhones = remember(uiState.selectedGroupMembers) {
+        uiState.selectedGroupMembers.map { it.phone }.toSet()
+    }
+
+    val availableContacts = remember(uiState.deviceContacts, uiState.addMemberSearchQuery, currentMemberPhones) {
+        uiState.deviceContacts.filter { !currentMemberPhones.contains(it.phone) }.let { list ->
+            if (uiState.addMemberSearchQuery.isBlank()) list
+            else list.filter {
+                it.name.contains(uiState.addMemberSearchQuery, ignoreCase = true) ||
+                it.phone.contains(uiState.addMemberSearchQuery)
+            }
+        }.sortedBy { it.name.lowercase() }
     }
 
     AlertDialog(
@@ -642,8 +1429,8 @@ fun CreateGroupDialog(
         containerColor = DarkSurface,
         title = {
             Text(
-                text = "إنشاء مجموعة بث جديدة",
-                fontSize = 20.sp,
+                text = "إضافة جهة اتصال للبطاقة",
+                fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 color = TextPrimary
             )
@@ -652,136 +1439,149 @@ fun CreateGroupDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 480.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                    .heightIn(max = 440.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                OutlinedTextField(
-                    value = uiState.newGroupName,
-                    onValueChange = onGroupNameChange,
-                    label = { Text("اسم المجموعة *") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = WhatsAppGreen,
-                        unfocusedBorderColor = Color(0x26FFFFFF),
-                        focusedTextColor = TextPrimary,
-                        unfocusedTextColor = TextPrimary
-                    )
-                )
-
-                OutlinedTextField(
-                    value = uiState.newGroupDescription,
-                    onValueChange = onGroupDescChange,
-                    label = { Text("وصف المجموعة (اختياري)") },
-                    modifier = Modifier.fillMaxWidth(),
-                    maxLines = 2,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = CyberCyan,
-                        unfocusedBorderColor = Color(0x26FFFFFF),
-                        focusedTextColor = TextPrimary,
-                        unfocusedTextColor = TextPrimary
-                    )
-                )
-
-                HorizontalDivider(color = Color(0x1AFFFFFF))
-
+                // تبويبات طريقة الإضافة
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(DarkBgPrimary)
+                        .padding(2.dp)
                 ) {
-                    Text(
-                        text = "اختر جهات الاتصال (${uiState.selectedContactPhones.size} محدد):",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = TextPrimary
+                    TabButton(
+                        title = "من دفتر الهاتف",
+                        count = 0,
+                        isSelected = selectedTab == 0,
+                        onClick = { selectedTab = 0 },
+                        modifier = Modifier.weight(1f)
                     )
-
-                    Row {
-                        TextButton(onClick = onSelectAll) {
-                            Text("تحديد الكل", fontSize = 11.sp, color = CyberCyan)
-                        }
-                        TextButton(onClick = onClearAll) {
-                            Text("إلغاء", fontSize = 11.sp, color = CoralError)
-                        }
-                    }
+                    TabButton(
+                        title = "إدخال يدوي",
+                        count = 0,
+                        isSelected = selectedTab == 1,
+                        onClick = { selectedTab = 1 },
+                        modifier = Modifier.weight(1f)
+                    )
                 }
 
-                OutlinedTextField(
-                    value = uiState.contactSearchQuery,
-                    onValueChange = onContactSearchChange,
-                    placeholder = { Text("ابحث في أسماء الهاتف...", fontSize = 12.sp) },
-                    leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null, tint = TextMuted) },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = CyberCyan,
-                        unfocusedBorderColor = Color(0x26FFFFFF),
-                        focusedTextColor = TextPrimary,
-                        unfocusedTextColor = TextPrimary
-                    )
-                )
-
-                if (filteredContacts.isEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(120.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "لا توجد جهات اتصال مطابقة",
-                            fontSize = 13.sp,
-                            color = TextMuted
+                if (selectedTab == 0) {
+                    OutlinedTextField(
+                        value = uiState.addMemberSearchQuery,
+                        onValueChange = onSearchChange,
+                        placeholder = { Text("ابحث في جهات الاتصال...", fontSize = 12.sp) },
+                        leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null, tint = TextMuted) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = CyberCyan,
+                            unfocusedBorderColor = Color(0x26FFFFFF),
+                            focusedTextColor = TextPrimary,
+                            unfocusedTextColor = TextPrimary
                         )
-                    }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.height(200.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        items(filteredContacts, key = { it.phone }) { contact ->
-                            val isSelected = uiState.selectedContactPhones.contains(contact.phone)
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .clickable { onToggleContact(contact.phone) }
-                                    .padding(horizontal = 8.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Checkbox(
-                                        checked = isSelected,
-                                        onCheckedChange = { onToggleContact(contact.phone) },
-                                        colors = CheckboxDefaults.colors(
-                                            checkedColor = WhatsAppGreen,
-                                            uncheckedColor = TextMuted
-                                        )
-                                    )
+                    )
 
-                                    Column {
-                                        Text(text = contact.name, fontSize = 13.sp, color = TextPrimary, fontWeight = FontWeight.Medium)
-                                        Text(text = contact.phone, fontSize = 11.sp, color = TextMuted)
+                    if (availableContacts.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(120.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("لا توجد جهات اتصال متاحة للإضافة", fontSize = 13.sp, color = TextMuted)
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.height(200.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            items(availableContacts, key = { it.phone }) { contact ->
+                                val isSelected = uiState.selectedMembersToAdd.contains(contact.phone)
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .clickable { onToggleContact(contact.phone) }
+                                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Checkbox(
+                                            checked = isSelected,
+                                            onCheckedChange = { onToggleContact(contact.phone) },
+                                            colors = CheckboxDefaults.colors(
+                                                checkedColor = WhatsAppGreen,
+                                                uncheckedColor = TextMuted
+                                            )
+                                        )
+                                        Column {
+                                            Text(text = contact.name, fontSize = 13.sp, color = TextPrimary, fontWeight = FontWeight.Medium)
+                                            Text(
+                                                text = contact.phone,
+                                                fontSize = 11.sp,
+                                                color = TextMuted,
+                                                style = androidx.compose.ui.text.TextStyle(textDirection = TextDirection.Ltr)
+                                            )
+                                        }
                                     }
                                 }
                             }
                         }
                     }
+                } else {
+                    OutlinedTextField(
+                        value = uiState.customAddName,
+                        onValueChange = onCustomNameChange,
+                        label = { Text("الاسم *") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = WhatsAppGreen,
+                            unfocusedBorderColor = Color(0x26FFFFFF),
+                            focusedTextColor = TextPrimary,
+                            unfocusedTextColor = TextPrimary
+                        )
+                    )
+
+                    OutlinedTextField(
+                        value = uiState.customAddPhone,
+                        onValueChange = onCustomPhoneChange,
+                        label = { Text("رقم الهاتف (مع رمز الدولة) *") },
+                        placeholder = { Text("+967...") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = WhatsAppGreen,
+                            unfocusedBorderColor = Color(0x26FFFFFF),
+                            focusedTextColor = TextPrimary,
+                            unfocusedTextColor = TextPrimary
+                        )
+                    )
                 }
             }
         },
         confirmButton = {
-            GradientButton(
-                text = "إنشاء المجموعة",
-                onClick = onCreateConfirm,
-                enabled = uiState.newGroupName.isNotBlank() && uiState.selectedContactPhones.isNotEmpty(),
-                icon = Icons.Filled.Check
-            )
+            if (selectedTab == 0) {
+                GradientButton(
+                    text = "إضافة المحدد (${uiState.selectedMembersToAdd.size})",
+                    onClick = onConfirmFromContacts,
+                    enabled = uiState.selectedMembersToAdd.isNotEmpty(),
+                    icon = Icons.Filled.Check
+                )
+            } else {
+                GradientButton(
+                    text = "إضافة الرقم",
+                    onClick = onConfirmCustom,
+                    enabled = uiState.customAddName.isNotBlank() && uiState.customAddPhone.isNotBlank(),
+                    icon = Icons.Filled.Check
+                )
+            }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {

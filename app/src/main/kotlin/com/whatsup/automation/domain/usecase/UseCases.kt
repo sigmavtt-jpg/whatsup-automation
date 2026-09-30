@@ -20,7 +20,8 @@ class ProcessIncomingMessageUseCase @Inject constructor(
     private val ruleRepository: RuleRepository,
     private val matchRuleUseCase: MatchRuleUseCase,
     private val logRepository: LogRepository,
-    private val deviceContactsManager: DeviceContactsManager
+    private val deviceContactsManager: DeviceContactsManager,
+    private val contactFormattingRepository: com.whatsup.automation.domain.repository.ContactFormattingRepository
 ) {
     suspend fun execute(message: IncomingMessage): ProcessResult {
         if (message.isGroupMessage || 
@@ -31,112 +32,6 @@ class ProcessIncomingMessageUseCase @Inject constructor(
             return ProcessResult.Ignored("تجاهل — رسالة مجموعة أو قناة إخبارية")
         }
 
-        // 1. درع منع تكرار وانتحال جهات الاتصال (Anti-Duplication Shield) والتسجيل التلقائي الذكي
-        val targetPhone = message.realPhone ?: message.senderPhone
-        val cleanPhone = targetPhone.replace("[^0-9]".toRegex(), "")
-        val isSenderLid = message.isLid || deviceContactsManager.isLid(targetPhone)
-
-        val registerPattern = Regex("""(سجلني عندك|سجل اسمي|احفظ رقمي|اسمي هو|سجلني|احفظني|اسمي)\s*[:=,-]?\s*([a-zA-Z\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]+(?:\s+[a-zA-Z\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]+)*)""")
-        val match = registerPattern.find(message.text)
-        if (match != null) {
-            val rawExtracted = match.groupValues[2].trim()
-            val extractedName = if (rawExtracted.startsWith("باسم ") && rawExtracted.length > 5) {
-                rawExtracted.removePrefix("باسم ").trim()
-            } else if (rawExtracted.startsWith("باسم") && rawExtracted.length > 4) {
-                rawExtracted.removePrefix("باسم").trim()
-            } else {
-                rawExtracted
-            }
-            if (extractedName.length in 2..30 && !extractedName.any { it.isDigit() }) {
-                // منع حفظ معرفات الـ LID الخام في دفتر الهاتف إذا لم يتوفر رقم حقيقي
-                if (isSenderLid && message.realPhone.isNullOrBlank()) {
-                    val replyMsg = "مرحباً بك! يرجى إرسال رقم هاتفك لتسجيلك بنجاح ✅"
-                    return ProcessResult.Executed("درع منع التكرار — حماية LID", listOf(ActionResult.ReplySent(replyMsg)))
-                }
-
-                val existingName = deviceContactsManager.getContactDisplayName(targetPhone)
-                    ?: deviceContactsManager.getContactDisplayName(cleanPhone)
-
-                if (existingName != null && existingName.equals(extractedName, ignoreCase = true)) {
-                    // الشخص مسجل مسبقاً بنفس الاسم تماماً — تجنب الحشو والتكرار
-                    val replyMsg = "أنت مسجل لدينا بالفعل باسم $existingName ✅"
-                    logRepository.insertLog(
-                        ActivityLog(
-                            senderPhone = targetPhone,
-                            messageText = message.text,
-                            matchedRule = "درع منع التكرار",
-                            actionExecuted = "تأكيد الاسم المسجل مسبقاً ($existingName)",
-                            status = LogStatus.SUCCESS,
-                            extractedName = existingName
-                        )
-                    )
-                    return ProcessResult.Executed("درع منع التكرار", listOf(ActionResult.ReplySent(replyMsg)))
-                } else if (existingName != null) {
-                    // نفس الحساب يطلب تعديل اسمه (مثلاً من أحمد إلى محمد) — تحديث الاسم القديم بدلاً من حشو جهات مكررة
-                    val updated = deviceContactsManager.saveOrUpdateContact(extractedName, targetPhone)
-                    if (updated) {
-                        val replyMsg = "تم تحديث اسمك إلى $extractedName بنجاح ✅"
-                        val actionDesc = "تحديث جهة اتصال ($existingName ➔ $extractedName) + إرسال رد"
-                        logRepository.insertLog(
-                            ActivityLog(
-                                senderPhone = targetPhone,
-                                messageText = message.text,
-                                matchedRule = "درع منع التكرار والتحديث الذكي",
-                                actionExecuted = actionDesc,
-                                status = LogStatus.SUCCESS,
-                                extractedName = extractedName
-                            )
-                        )
-                        return ProcessResult.Executed("درع منع التكرار والتحديث الذكي", listOf(ActionResult.ReplySent(replyMsg)))
-                    } else {
-                        val replyMsg = "عذراً، تعذر تحديث الاسم حالياً ⚠️"
-                        logRepository.insertLog(
-                            ActivityLog(
-                                senderPhone = targetPhone,
-                                messageText = message.text,
-                                matchedRule = "درع منع التكرار والتحديث الذكي",
-                                actionExecuted = "فشل تحديث جهة اتصال ($existingName ➔ $extractedName)",
-                                status = LogStatus.FAILURE,
-                                extractedName = extractedName
-                            )
-                        )
-                        return ProcessResult.Executed("درع منع التكرار والتحديث الذكي — فشل", listOf(ActionResult.ReplySent(replyMsg)))
-                    }
-                } else {
-                    // جهة اتصال جديدة تسجل لأول مرة
-                    val saved = deviceContactsManager.saveOrUpdateContact(extractedName, targetPhone)
-                    if (saved) {
-                        val replyMsg = "تم حفظك باسم $extractedName بنجاح ✅"
-                        val actionDesc = "حفظ جهة اتصال ($extractedName) + إرسال رد"
-                        logRepository.insertLog(
-                            ActivityLog(
-                                senderPhone = targetPhone,
-                                messageText = message.text,
-                                matchedRule = "التسجيل التلقائي الذكي",
-                                actionExecuted = actionDesc,
-                                status = LogStatus.SUCCESS,
-                                extractedName = extractedName
-                            )
-                        )
-                        return ProcessResult.Executed("التسجيل التلقائي الذكي", listOf(ActionResult.ReplySent(replyMsg)))
-                    } else {
-                        val replyMsg = "عذراً، تعذر حفظ جهة الاتصال حالياً ⚠️"
-                        logRepository.insertLog(
-                            ActivityLog(
-                                senderPhone = targetPhone,
-                                messageText = message.text,
-                                matchedRule = "التسجيل التلقائي الذكي",
-                                actionExecuted = "فشل حفظ جهة اتصال ($extractedName)",
-                                status = LogStatus.FAILURE,
-                                extractedName = extractedName
-                            )
-                        )
-                        return ProcessResult.Executed("التسجيل التلقائي الذكي — فشل", listOf(ActionResult.ReplySent(replyMsg)))
-                    }
-                }
-            }
-        }
-
         val rules = matchRuleUseCase.getEnabledRulesSorted()
 
         for (rule in rules) {
@@ -145,7 +40,7 @@ class ProcessIncomingMessageUseCase @Inject constructor(
             }
         }
 
-        // تجاهل صامت تماماً بدون أي كتابة في قاعدة البيانات
+        // تجاهل صامت تماماً بدون أي كتابة في قاعدة البيانات إذا لم تطابق أي قاعدة
         return ProcessResult.NoMatch
     }
 
@@ -154,7 +49,10 @@ class ProcessIncomingMessageUseCase @Inject constructor(
         message: IncomingMessage
     ): ProcessResult {
         val targetPhone = message.realPhone ?: message.senderPhone
+        val cleanPhone = targetPhone.replace("[^0-9]".toRegex(), "")
+        val isSenderLid = message.isLid || deviceContactsManager.isLid(targetPhone)
         val results = mutableListOf<ActionResult>()
+        var extractedContactName: String? = null
 
         for (action in rule.actions) {
             when (action) {
@@ -167,9 +65,74 @@ class ProcessIncomingMessageUseCase @Inject constructor(
                     } else {
                         action.message
                     }
-                    results.add(
-                        ActionResult.ReplySent(finalReply)
-                    )
+                    results.add(ActionResult.ReplySent(finalReply))
+                }
+
+                is RuleAction.SaveContactAndReply -> {
+                    // استخراج الاسم من الرسالة بذكاء
+                    val registerPattern = Regex("""(سجلني عندك|سجل اسمي|احفظ رقمي|اسمي هو|سجلني|احفظني|اسمي)\s*[:=,-]?\s*([a-zA-Z\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]+(?:\s+[a-zA-Z\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]+)*)""")
+                    val match = registerPattern.find(message.text)
+                    val rawExtracted = if (match != null) {
+                        match.groupValues[2].trim()
+                    } else {
+                        // استخراج الكلمات بعد الكلمة المفتاحية في القاعدة
+                        var textWithoutPattern = message.text
+                        rule.patternValue.split(',', '،').forEach { kw ->
+                            textWithoutPattern = textWithoutPattern.replace(kw.trim(), "", ignoreCase = true)
+                        }
+                        textWithoutPattern.trim(':', '-', '=', ',', '،', ' ')
+                    }
+
+                    val nameCandidate = if (rawExtracted.startsWith("باسم ") && rawExtracted.length > 5) {
+                        rawExtracted.removePrefix("باسم ").trim()
+                    } else if (rawExtracted.startsWith("باسم") && rawExtracted.length > 4) {
+                        rawExtracted.removePrefix("باسم").trim()
+                    } else {
+                        rawExtracted
+                    }
+
+                    val finalExtractedName = if (nameCandidate.length in 2..35 && !nameCandidate.any { it.isDigit() }) {
+                        nameCandidate
+                    } else {
+                        message.senderName.takeIf { it.isNotBlank() && !it.startsWith("+") } ?: "جهة اتصال جديدة"
+                    }
+
+                    extractedContactName = finalExtractedName
+
+                    // منع حفظ معرفات LID بدون رقم هاتف حقيقي
+                    if (isSenderLid && message.realPhone.isNullOrBlank()) {
+                        val replyMsg = "مرحباً بك! يرجى إرسال رقم هاتفك لتسجيلك بنجاح ✅"
+                        results.add(ActionResult.ReplySent(replyMsg))
+                    } else {
+                        val formattingSettings = try {
+                            contactFormattingRepository.getSettings().first()
+                        } catch (_: Exception) {
+                            ContactFormattingSettings()
+                        }
+
+                        // الاسم المنسق النظيف لدفتر الهاتف
+                        val phonebookFormattedName = formattingSettings.formatForPhonebook(finalExtractedName)
+
+                        val existingName = deviceContactsManager.getContactDisplayName(targetPhone)
+                            ?: deviceContactsManager.getContactDisplayName(cleanPhone)
+
+                        if (existingName != null && (existingName.equals(finalExtractedName, ignoreCase = true) || existingName.equals(phonebookFormattedName, ignoreCase = true))) {
+                            // مسجل مسبقاً
+                            val replyTemplate = action.replyMessage.ifBlank { "أنت مسجل لدينا بالفعل باسم {name} ✅" }
+                            val finalReply = replyTemplate.replace("{name}", finalExtractedName)
+                            results.add(ActionResult.ReplySent(finalReply))
+                        } else {
+                            val saved = deviceContactsManager.saveOrUpdateContact(phonebookFormattedName, targetPhone)
+                            if (saved) {
+                                val replyTemplate = action.replyMessage.ifBlank { "تم حفظك باسم {name} بنجاح ✅" }
+                                val finalReply = replyTemplate.replace("{name}", finalExtractedName)
+                                results.add(ActionResult.ReplySent(finalReply))
+                            } else {
+                                val replyMsg = "عذراً، تعذر حفظ جهة الاتصال حالياً ⚠️"
+                                results.add(ActionResult.ReplySent(replyMsg))
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -178,7 +141,8 @@ class ProcessIncomingMessageUseCase @Inject constructor(
         val hasError = results.any { it is ActionResult.Error }
         val logStatus = if (hasError) LogStatus.FAILURE else LogStatus.SUCCESS
 
-        val contactName = deviceContactsManager.getContactDisplayName(targetPhone)
+        val contactName = extractedContactName
+            ?: deviceContactsManager.getContactDisplayName(targetPhone)
             ?: message.senderName.takeIf { it.isNotBlank() }
 
         logRepository.insertLog(
