@@ -44,5 +44,17 @@ abstract class AppModule {
     abstract fun bindContactFormattingRepository(
         impl: com.whatsup.automation.data.repository.ContactFormattingRepositoryImpl
     ): com.whatsup.automation.domain.repository.ContactFormattingRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindAntiBanRepository(
+        impl: com.whatsup.automation.data.repository.AntiBanRepositoryImpl
+    ): com.whatsup.automation.domain.repository.AntiBanRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindNotificationRepository(
+        impl: com.whatsup.automation.data.repository.NotificationRepositoryImpl
+    ): com.whatsup.automation.domain.repository.NotificationRepository
 }
 

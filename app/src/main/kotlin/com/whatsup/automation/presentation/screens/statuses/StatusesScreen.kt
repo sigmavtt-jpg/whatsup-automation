@@ -24,9 +24,14 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.whatsup.automation.presentation.components.GlassmorphicCard
+import com.whatsup.automation.presentation.components.BentoCard
+import com.whatsup.automation.presentation.components.PulseReactor
+import com.whatsup.automation.presentation.components.StoryAvatarRing
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import com.whatsup.automation.presentation.theme.*
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StatusesScreen(
     viewModel: StatusesViewModel,
@@ -37,6 +42,7 @@ fun StatusesScreen(
     var showCustomEmojiDialog by remember { mutableStateOf(false) }
     var customEmojiInput by remember { mutableStateOf("") }
     val haptic = LocalHapticFeedback.current
+    val pullToRefreshState = rememberPullToRefreshState()
 
     // نافذة إدخال إيموجي مخصص
     if (showCustomEmojiDialog) {
@@ -46,10 +52,9 @@ fun StatusesScreen(
                 customEmojiInput = ""
             }
         ) {
-            GlassmorphicCard(
+            BentoCard(
                 modifier = Modifier.fillMaxWidth().padding(16.dp),
-                cornerRadius = 20.dp,
-                borderBrush = Brush.linearGradient(listOf(CyberCyan.copy(alpha = 0.5f), WhatsAppGreen.copy(alpha = 0.3f)))
+                borderBrush = ObsidianGlowBorder.Cyan
             ) {
                 Column(
                     modifier = Modifier.fillMaxWidth().padding(12.dp),
@@ -120,14 +125,24 @@ fun StatusesScreen(
         }
     }
 
-    LazyColumn(
+    PullToRefreshBox(
+        isRefreshing = uiState.isRefreshing,
+        onRefresh = {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            viewModel.refreshStatuses()
+        },
+        state = pullToRefreshState,
         modifier = modifier
             .fillMaxSize()
             .background(DarkBgPrimary)
-            .padding(horizontal = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp),
-        contentPadding = PaddingValues(top = 28.dp, bottom = 100.dp)
     ) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp),
+            contentPadding = PaddingValues(top = 28.dp, bottom = 100.dp)
+        ) {
         // شريط العنوان
         item {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -145,14 +160,53 @@ fun StatusesScreen(
             }
         }
 
-        // بطاقة الحالة النشطة الديناميكية
+        // شريط القصص الدائري الحقيقي (يظهر فقط عند وجود حالات فعلية مرصودة)
+        if (uiState.statuses.isNotEmpty()) {
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "الحالات المرصودة مؤخراً",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextMuted
+                    )
+
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(14.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        items(uiState.statuses.take(15), key = { it.id }) { story ->
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                StoryAvatarRing(
+                                    initials = story.senderName.ifBlank { story.senderPhone }.take(2),
+                                    isViewed = story.isViewed,
+                                    size = 56.dp,
+                                    onClick = {
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    }
+                                )
+
+                                Text(
+                                    text = story.senderName.ifBlank { story.senderPhone },
+                                    fontSize = 11.sp,
+                                    color = TextSecondary,
+                                    maxLines = 1
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // بطاقة الحالة النشطة والمؤشرات
         item {
-            GlassmorphicCard(
+            BentoCard(
                 modifier = Modifier.fillMaxWidth(),
-                cornerRadius = 20.dp,
-                borderBrush = Brush.linearGradient(
-                    listOf(WhatsAppGreen.copy(alpha = 0.6f), CyberCyan.copy(alpha = 0.3f))
-                )
+                borderBrush = ObsidianGlowBorder.Emerald
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     Row(
@@ -167,73 +221,59 @@ fun StatusesScreen(
                                 .background(WhatsAppGreen.copy(alpha = 0.15f)),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(
-                                imageVector = Icons.Filled.AutoAwesome,
-                                contentDescription = null,
-                                tint = WhatsAppGreen,
-                                modifier = Modifier.size(24.dp)
+                            PulseReactor(
+                                isActive = true,
+                                activeColor = WhatsAppGreen
                             )
                         }
 
                         Column(modifier = Modifier.weight(1f)) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(8.dp)
-                                        .clip(CircleShape)
-                                        .background(WhatsAppGreen)
-                                )
-                                Text(
-                                    text = "المحرك الذكي نشط وتلقائي",
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = TextPrimary
-                                )
-                            }
                             Text(
-                                text = "يتم رصد الحالات والمشاهدة والتفاعل آلياً في الخلفية بدون تدخل يدوي",
+                                text = "محرك الحالات التلقائي",
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary
+                            )
+                            Text(
+                                text = "مشاهدة وتفاعل فوري 24/7",
                                 fontSize = 12.sp,
-                                color = TextMuted,
-                                lineHeight = 16.sp
+                                color = WhatsAppGreenLight
                             )
                         }
                     }
 
                     HorizontalDivider(color = Color(0x1AFFFFFF), thickness = 1.dp)
 
-                    // إحصائيات سريعة
+                    // إحصائيات سريعة بنمط Bento
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Column {
-                            Text(text = "الحالات المعالجة", fontSize = 11.sp, color = TextMuted)
+                            Text(text = "الحالات المعالجة", fontSize = 12.sp, color = TextMuted)
                             Text(
                                 text = "${uiState.totalViewedCount}",
-                                fontSize = 20.sp,
+                                fontSize = 22.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = TextPrimary
                             )
                         }
 
                         Column {
-                            Text(text = "الأشخاص المتفاعل معهم", fontSize = 11.sp, color = TextMuted)
+                            Text(text = "الأشخاص المتفاعل معهم", fontSize = 12.sp, color = TextMuted)
                             Text(
                                 text = "${uiState.viewedUniquePersonsCount}",
-                                fontSize = 20.sp,
+                                fontSize = 22.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = CyberCyan
                             )
                         }
 
                         Column {
-                            Text(text = "رمز التفاعل الحالي", fontSize = 11.sp, color = TextMuted)
+                            Text(text = "رمز التفاعل الحالي", fontSize = 12.sp, color = TextMuted)
                             Text(
                                 text = uiState.settings.defaultEmoji.ifBlank { "💚" },
-                                fontSize = 20.sp,
+                                fontSize = 22.sp,
                                 fontWeight = FontWeight.Bold
                             )
                         }
@@ -244,12 +284,9 @@ fun StatusesScreen(
 
         // بطاقة تخصيص إيموجي التفاعل التلقائي
         item {
-            GlassmorphicCard(
+            BentoCard(
                 modifier = Modifier.fillMaxWidth(),
-                cornerRadius = 18.dp,
-                borderBrush = Brush.linearGradient(
-                    listOf(Color(0x22FFFFFF), Color(0x08FFFFFF))
-                )
+                borderBrush = ObsidianGlowBorder.None
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     Row(
@@ -266,7 +303,7 @@ fun StatusesScreen(
 
                         Text(
                             text = "الحالي: ${uiState.settings.defaultEmoji.ifBlank { "💚" }}",
-                            fontSize = 13.sp,
+                            fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = WhatsAppGreen
                         )
@@ -324,43 +361,6 @@ fun StatusesScreen(
                 }
             }
         }
-
-        // بطاقة توضيح معايير الخصوصية والأمان الصارمة
-        item {
-            GlassmorphicCard(
-                modifier = Modifier.fillMaxWidth(),
-                cornerRadius = 16.dp,
-                borderBrush = Brush.linearGradient(
-                    listOf(Color(0x15FFFFFF), Color(0x05FFFFFF))
-                )
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.Shield,
-                            contentDescription = null,
-                            tint = CyberCyan,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Text(
-                            text = "قواعد الفلترة والحماية",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimary
-                        )
-                    }
-
-                    Text(
-                        text = "• يتفاعل النظام فقط مع جهات الاتصال المسجلة في دفتر الهاتف أو حساب Google/Gmail.\n• يتم تجاهل أي حالات من أرقام غير مسجلة أو قنوات إخبارية لحماية خصوصيتك وأمان حسابك.",
-                        fontSize = 11.sp,
-                        color = TextSecondary,
-                        lineHeight = 17.sp
-                    )
-                }
-            }
-        }
     }
+}
 }

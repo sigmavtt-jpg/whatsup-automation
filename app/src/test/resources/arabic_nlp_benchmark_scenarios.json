@@ -1,0 +1,275 @@
+[
+  {
+    "category": "honorifics_and_titles",
+    "description": "لقب قبلي وديني مع نسب يمني",
+    "input_text": "حياك الله يا غالي معك الشيخ ناصر بن مبارك من مارب",
+    "expected_name": "الشيخ ناصر بن مبارك",
+    "should_save": true
+  },
+  {
+    "category": "honorifics_and_titles",
+    "description": "لقب طبي مع تخصص",
+    "input_text": "مساء الخير، أنا الدكتور محمد الشامي استشاري باطنية",
+    "expected_name": "الدكتور محمد الشامي",
+    "should_save": true
+  },
+  {
+    "category": "honorifics_and_titles",
+    "description": "لقب هندسي",
+    "input_text": "يا هلا سجل رقمي معك المهندس فؤاد",
+    "expected_name": "المهندس فؤاد",
+    "should_save": true
+  },
+  {
+    "category": "honorifics_and_titles",
+    "description": "لقب أستاذية",
+    "input_text": "السلام عليكم انا الأستاذ عبد العزيز حبيت استفسر",
+    "expected_name": "الأستاذ عبد العزيز",
+    "should_save": true
+  },
+  {
+    "category": "honorifics_and_titles",
+    "description": "لقب قضاء وشرع",
+    "input_text": "معك القاضي عبد الرحمن يا طيب",
+    "expected_name": "القاضي عبد الرحمن",
+    "should_save": true
+  },
+  {
+    "category": "honorifics_and_titles",
+    "description": "لقب محاماة",
+    "input_text": "سجل اسمي المحامي عادل الكندي",
+    "expected_name": "المحامي عادل الكندي",
+    "should_save": true
+  },
+  {
+    "category": "honorifics_and_titles",
+    "description": "لقب الحاج الاجتماعي",
+    "input_text": "حياك الله خزن رقمي عندك باسم الحاج صالح اليافعي",
+    "expected_name": "الحاج صالح اليافعي",
+    "should_save": true
+  },
+  {
+    "category": "honorifics_and_titles",
+    "description": "رتبة عسكرية شائعة",
+    "input_text": "معاك العميد أحمد الصبيحي",
+    "expected_name": "العميد أحمد الصبيحي",
+    "should_save": true
+  },
+  {
+    "category": "kunyas_and_kinship",
+    "description": "كنية أبو فلان مع بادئة معك",
+    "input_text": "السلام عليكم، سجل رقمي عندك يا طيب معك أبو راكان",
+    "expected_name": "أبو راكان",
+    "should_save": true
+  },
+  {
+    "category": "kunyas_and_kinship",
+    "description": "كنية أبو فلان مع اسم العائلة",
+    "input_text": "اسمي أبو ماجد القحطاني",
+    "expected_name": "أبو ماجد القحطاني",
+    "should_save": true
+  },
+  {
+    "category": "kunyas_and_kinship",
+    "description": "كنية أم فلان",
+    "input_text": "احفظي رقمي عندك اختك أم عمر",
+    "expected_name": "أم عمر",
+    "should_save": true
+  },
+  {
+    "category": "kunyas_and_kinship",
+    "description": "نسب بـ ابن فلان",
+    "input_text": "سجلني ابن خلدون الحضرمي",
+    "expected_name": "ابن خلدون الحضرمي",
+    "should_save": true
+  },
+  {
+    "category": "kunyas_and_kinship",
+    "description": "نسب بـ آل فلان",
+    "input_text": "معاك طارق آل جابر",
+    "expected_name": "طارق آل جابر",
+    "should_save": true
+  },
+  {
+    "category": "dialectal_greetings",
+    "description": "لهجة يمنية - خزن رقم اخوك",
+    "input_text": "حياك يا الحبيب خزن رقم اخوك وضاح العولقي",
+    "expected_name": "وضاح العولقي",
+    "should_save": true
+  },
+  {
+    "category": "dialectal_greetings",
+    "description": "لهجة يمنية - معك فلان",
+    "input_text": "مساء النور معك عبد الله الحميري",
+    "expected_name": "عبد الله الحميري",
+    "should_save": true
+  },
+  {
+    "category": "dialectal_greetings",
+    "description": "لهجة خليجية - سجلني يا غالي",
+    "input_text": "ارحب يا الذيب سجلني عندك باسم فيصل العتيبي",
+    "expected_name": "فيصل العتيبي",
+    "should_save": true
+  },
+  {
+    "category": "dialectal_greetings",
+    "description": "لهجة شامية - انا اخوك فلان",
+    "input_text": "مية هلا انا اخوك سامر الشامي سجل رقمي عندك",
+    "expected_name": "سامر الشامي",
+    "should_save": true
+  },
+  {
+    "category": "dialectal_greetings",
+    "description": "لهجة مصرية - معاك فلان",
+    "input_text": "ازيك يا باشا معاك محمود عبد الرازق",
+    "expected_name": "محمود عبد الرازق",
+    "should_save": true
+  },
+  {
+    "category": "direct_short_name",
+    "description": "اسم صريح ثنائي بمفرده بدون بادئة",
+    "input_text": "خالد عبد الرحمن",
+    "expected_name": "خالد عبد الرحمن",
+    "should_save": true
+  },
+  {
+    "category": "direct_short_name",
+    "description": "اسم ثلاثي مع إيموجي",
+    "input_text": "عمر بن عبد العزيز 🌹",
+    "expected_name": "عمر بن عبد العزيز 🌹",
+    "should_save": true
+  },
+  {
+    "category": "strict_negation",
+    "description": "نفي صريح بـ لا تسجل",
+    "input_text": "لا تسجل رقمي ياخي",
+    "expected_name": "",
+    "should_save": false
+  },
+  {
+    "category": "strict_negation",
+    "description": "نفي صريح بـ ممنوع تحفظ",
+    "input_text": "ممنوع تحفظ رقمي عندك",
+    "expected_name": "",
+    "should_save": false
+  },
+  {
+    "category": "strict_negation",
+    "description": "نفي بـ مش عاوز",
+    "input_text": "مش عايزك تسجلني",
+    "expected_name": "",
+    "should_save": false
+  },
+  {
+    "category": "strict_negation",
+    "description": "نفي بـ بلاش تحفظ",
+    "input_text": "بلاش تسجل اسمي خلاص",
+    "expected_name": "",
+    "should_save": false
+  },
+  {
+    "category": "quoted_narrative",
+    "description": "سرد حوار مع طرف ثالث - صاحبي قال",
+    "input_text": "صاحبي قال لي سجلني عندك وانا رفضت",
+    "expected_name": "",
+    "should_save": false
+  },
+  {
+    "category": "quoted_narrative",
+    "description": "سرد حوار مع طرف ثالث - هو قال احفظني",
+    "input_text": "واحد كلمني وقال احفظني باسم محمد",
+    "expected_name": "",
+    "should_save": false
+  },
+  {
+    "category": "isolated_commands",
+    "description": "أمر مجرد بكلمة سجلني فقط",
+    "input_text": "سجلني",
+    "expected_name": "",
+    "should_save": false
+  },
+  {
+    "category": "isolated_commands",
+    "description": "أمر مجرد بكلمة احفظني عندك",
+    "input_text": "احفظني عندك",
+    "expected_name": "",
+    "should_save": false
+  },
+  {
+    "category": "isolated_commands",
+    "description": "أمر مجرد بكلمة سجل رقمي",
+    "input_text": "سجل رقمي",
+    "expected_name": "",
+    "should_save": false
+  },
+  {
+    "category": "isolated_commands",
+    "description": "أمر مجرد بكلمة احفظ اسمي",
+    "input_text": "احفظ اسمي يا غالي",
+    "expected_name": "",
+    "should_save": false
+  },
+  {
+    "category": "gibberish_and_symbols",
+    "description": "رموز عشوائية",
+    "input_text": "#@%#$@^$%",
+    "expected_name": "",
+    "should_save": false
+  },
+  {
+    "category": "gibberish_and_symbols",
+    "description": "علامات ترقيم",
+    "input_text": "...???!!!",
+    "expected_name": "",
+    "should_save": false
+  },
+  {
+    "category": "gibberish_and_symbols",
+    "description": "إيموجيات فقط بدون أحرف",
+    "input_text": "❤️❤️❤️❤️",
+    "expected_name": "",
+    "should_save": false
+  },
+  {
+    "category": "gibberish_and_symbols",
+    "description": "ضحكات إيموجي فقط",
+    "input_text": "😂😂😂😂",
+    "expected_name": "",
+    "should_save": false
+  },
+  {
+    "category": "gibberish_and_symbols",
+    "description": "أرقام هواتف مجردة",
+    "input_text": "+967771234567",
+    "expected_name": "",
+    "should_save": false
+  },
+  {
+    "category": "general_chat_and_greetings",
+    "description": "تحية عامة فقط",
+    "input_text": "السلام عليكم ورحمة الله وبركاته",
+    "expected_name": "",
+    "should_save": false
+  },
+  {
+    "category": "general_chat_and_greetings",
+    "description": "سؤال عن السعر",
+    "input_text": "كم السعر لو سمحت؟",
+    "expected_name": "",
+    "should_save": false
+  },
+  {
+    "category": "general_chat_and_greetings",
+    "description": "شكر وتقدير فقط",
+    "input_text": "جزاك الله خير يا غالي مشكور",
+    "expected_name": "",
+    "should_save": false
+  },
+  {
+    "category": "general_chat_and_greetings",
+    "description": "تأكيد أو موافقة فقط",
+    "input_text": "تمام اوكي اتفقنا",
+    "expected_name": "",
+    "should_save": false
+  }
+]

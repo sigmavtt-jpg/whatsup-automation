@@ -24,7 +24,14 @@ data class RuleEntity(
 /**
  * كيان سجل النشاط.
  */
-@Entity(tableName = "activity_logs")
+@Entity(
+    tableName = "activity_logs",
+    indices = [
+        Index(value = ["timestamp"]),
+        Index(value = ["senderPhone"]),
+        Index(value = ["status"])
+    ]
+)
 data class LogEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
@@ -40,7 +47,15 @@ data class LogEntity(
 /**
  * كيان قصة الحالة (Status) في Room.
  */
-@Entity(tableName = "statuses")
+@Entity(
+    tableName = "statuses",
+    indices = [
+        Index(value = ["timestamp"]),
+        Index(value = ["senderPhone"]),
+        Index(value = ["isViewed"]),
+        Index(value = ["isReacted"])
+    ]
+)
 data class StatusEntity(
     @PrimaryKey
     val id: String,

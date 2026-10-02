@@ -49,7 +49,8 @@ data class LogsUiState(
     val contactDisplayNames: Map<String, String> = emptyMap(),
     val selectedFilter: LogStatusFilter = LogStatusFilter.ALL,
     val searchQuery: String = "",
-    val isRefreshing: Boolean = false
+    val isRefreshing: Boolean = false,
+    val antiBanSettings: com.whatsup.automation.domain.model.AntiBanSettings = com.whatsup.automation.domain.model.AntiBanSettings()
 )
 
 enum class LogStatusFilter {
@@ -64,9 +65,10 @@ enum class LogStatusFilter {
 class LogsViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val logRepository: LogRepository,
-        private val whatsAppEngine: WhatsAppEngine,
+    private val whatsAppEngine: WhatsAppEngine,
     private val sessionKeystore: SessionKeystore,
-    private val deviceContactsManager: com.whatsup.automation.data.local.contacts.DeviceContactsManager
+    private val deviceContactsManager: com.whatsup.automation.data.local.contacts.DeviceContactsManager,
+    private val antiBanRepository: com.whatsup.automation.domain.repository.AntiBanRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LogsUiState())
@@ -77,7 +79,26 @@ class LogsViewModel @Inject constructor(
     init {
         observeLogs()
         observeEngineDiagnostics()
+        observeAntiBanSettings()
         startAutoRefresh()
+    }
+
+    private fun observeAntiBanSettings() {
+        viewModelScope.launch {
+            try {
+                antiBanRepository.getSettings().collect { settings ->
+                    _uiState.update { it.copy(antiBanSettings = settings) }
+                }
+            } catch (_: Exception) {}
+        }
+    }
+
+    fun updateAntiBanSettings(settings: com.whatsup.automation.domain.model.AntiBanSettings) {
+        viewModelScope.launch {
+            try {
+                antiBanRepository.updateSettings(settings)
+            } catch (_: Exception) {}
+        }
     }
 
     private fun startAutoRefresh() {

@@ -43,8 +43,14 @@ import com.whatsup.automation.presentation.screens.rules.RulesScreen
 import com.whatsup.automation.presentation.screens.rules.RulesViewModel
 import com.whatsup.automation.presentation.screens.groups.GroupsScreen
 import com.whatsup.automation.presentation.screens.groups.GroupsViewModel
+import com.whatsup.automation.presentation.screens.chatshub.ChatsHubScreen
+import com.whatsup.automation.presentation.screens.chatshub.ChatsHubViewModel
 import com.whatsup.automation.presentation.screens.statuses.StatusesScreen
 import com.whatsup.automation.presentation.screens.statuses.StatusesViewModel
+import com.whatsup.automation.presentation.screens.automation.AutomationHubScreen
+import com.whatsup.automation.presentation.screens.automation.AutomationTab
+import com.whatsup.automation.presentation.screens.system.SystemHubScreen
+import com.whatsup.automation.presentation.screens.system.SystemTab
 import com.whatsup.automation.presentation.theme.DarkBgPrimary
 import com.whatsup.automation.presentation.theme.WhatsUpTheme
 import com.whatsup.automation.data.engine.WhatsAppEngine
@@ -147,29 +153,86 @@ class MainActivity : ComponentActivity() {
                                     DashboardScreen(viewModel = viewModel)
                                 }
 
-                                composable(Screen.Pairing.route) {
-                                    val viewModel: PairingViewModel = hiltViewModel()
-                                    PairingScreen(viewModel = viewModel)
+                                composable(Screen.Automation.route) {
+                                    val rulesViewModel: RulesViewModel = hiltViewModel()
+                                    val statusesViewModel: StatusesViewModel = hiltViewModel()
+                                    val groupsViewModel: GroupsViewModel = hiltViewModel()
+                                    AutomationHubScreen(
+                                        rulesViewModel = rulesViewModel,
+                                        statusesViewModel = statusesViewModel,
+                                        groupsViewModel = groupsViewModel
+                                    )
                                 }
 
+                                composable(Screen.ChatsHub.route) {
+                                    val viewModel: ChatsHubViewModel = hiltViewModel()
+                                    ChatsHubScreen(viewModel = viewModel)
+                                }
+
+                                composable(Screen.System.route) {
+                                    val pairingViewModel: PairingViewModel = hiltViewModel()
+                                    val logsViewModel: LogsViewModel = hiltViewModel()
+                                    SystemHubScreen(
+                                        pairingViewModel = pairingViewModel,
+                                        logsViewModel = logsViewModel
+                                    )
+                                }
+
+                                // المسارات الفرعية للتوجيه المباشر
                                 composable(Screen.Rules.route) {
-                                    val viewModel: RulesViewModel = hiltViewModel()
-                                    RulesScreen(viewModel = viewModel)
+                                    val rulesViewModel: RulesViewModel = hiltViewModel()
+                                    val statusesViewModel: StatusesViewModel = hiltViewModel()
+                                    val groupsViewModel: GroupsViewModel = hiltViewModel()
+                                    AutomationHubScreen(
+                                        rulesViewModel = rulesViewModel,
+                                        statusesViewModel = statusesViewModel,
+                                        groupsViewModel = groupsViewModel,
+                                        initialTab = AutomationTab.RULES
+                                    )
                                 }
 
                                 composable(Screen.Statuses.route) {
-                                    val viewModel: StatusesViewModel = hiltViewModel()
-                                    StatusesScreen(viewModel = viewModel)
-                                }
-
-                                composable(Screen.Logs.route) {
-                                    val viewModel: LogsViewModel = hiltViewModel()
-                                    LogsScreen(viewModel = viewModel)
+                                    val rulesViewModel: RulesViewModel = hiltViewModel()
+                                    val statusesViewModel: StatusesViewModel = hiltViewModel()
+                                    val groupsViewModel: GroupsViewModel = hiltViewModel()
+                                    AutomationHubScreen(
+                                        rulesViewModel = rulesViewModel,
+                                        statusesViewModel = statusesViewModel,
+                                        groupsViewModel = groupsViewModel,
+                                        initialTab = AutomationTab.STATUSES
+                                    )
                                 }
 
                                 composable(Screen.Groups.route) {
-                                    val viewModel: GroupsViewModel = hiltViewModel()
-                                    GroupsScreen(viewModel = viewModel)
+                                    val rulesViewModel: RulesViewModel = hiltViewModel()
+                                    val statusesViewModel: StatusesViewModel = hiltViewModel()
+                                    val groupsViewModel: GroupsViewModel = hiltViewModel()
+                                    AutomationHubScreen(
+                                        rulesViewModel = rulesViewModel,
+                                        statusesViewModel = statusesViewModel,
+                                        groupsViewModel = groupsViewModel,
+                                        initialTab = AutomationTab.GROUPS
+                                    )
+                                }
+
+                                composable(Screen.Pairing.route) {
+                                    val pairingViewModel: PairingViewModel = hiltViewModel()
+                                    val logsViewModel: LogsViewModel = hiltViewModel()
+                                    SystemHubScreen(
+                                        pairingViewModel = pairingViewModel,
+                                        logsViewModel = logsViewModel,
+                                        initialTab = SystemTab.PAIRING
+                                    )
+                                }
+
+                                composable(Screen.Logs.route) {
+                                    val pairingViewModel: PairingViewModel = hiltViewModel()
+                                    val logsViewModel: LogsViewModel = hiltViewModel()
+                                    SystemHubScreen(
+                                        pairingViewModel = pairingViewModel,
+                                        logsViewModel = logsViewModel,
+                                        initialTab = SystemTab.LOGS
+                                    )
                                 }
                             }
                         }

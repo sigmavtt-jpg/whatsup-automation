@@ -33,10 +33,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.whatsup.automation.domain.model.ConnectionState
+import com.whatsup.automation.presentation.components.BentoCard
 import com.whatsup.automation.presentation.components.ConnectionStatusBadge
 import com.whatsup.automation.presentation.components.GlassmorphicCard
 import com.whatsup.automation.presentation.components.GradientButton
 import com.whatsup.automation.presentation.components.PhoneInputWithCountrySelector
+import com.whatsup.automation.presentation.components.SegmentedPillSelector
 import com.whatsup.automation.presentation.theme.*
 
 @Composable
@@ -239,78 +241,23 @@ fun PairingScreen(
             }
         }
 
-        // محدد طرق الربط (3 تبويبات واضحة)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
-                .background(DarkSurface)
-                .padding(4.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            // 1. تبويب كود الاقتران (الأساسي)
-            Box(
-                modifier = Modifier
-                    .weight(1.1f)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(if (uiState.selectedMethod == PairingMethod.PAIRING_CODE) WhatsAppGreen else Color.Transparent)
-                    .clickable { viewModel.selectMethod(PairingMethod.PAIRING_CODE) }
-                    .padding(vertical = 10.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "كود الرقم (الأساسي) 👑",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 11.sp,
-                    color = if (uiState.selectedMethod == PairingMethod.PAIRING_CODE) DarkBgPrimary else TextSecondary,
-                    textAlign = TextAlign.Center
-                )
-            }
-
-            // 2. تبويب رمز QR
-            Box(
-                modifier = Modifier
-                    .weight(0.8f)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(if (uiState.selectedMethod == PairingMethod.QR_CODE) WhatsAppGreen else Color.Transparent)
-                    .clickable { viewModel.selectMethod(PairingMethod.QR_CODE) }
-                    .padding(vertical = 10.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "رمز QR",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 11.sp,
-                    color = if (uiState.selectedMethod == PairingMethod.QR_CODE) DarkBgPrimary else TextSecondary,
-                    textAlign = TextAlign.Center
-                )
-            }
-
-            // 3. تبويب مساعد النظام (الاحتياطي)
-            Box(
-                modifier = Modifier
-                    .weight(1.1f)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(if (uiState.selectedMethod == PairingMethod.DIRECT_SYSTEM) WhatsAppGreen else Color.Transparent)
-                    .clickable { viewModel.selectMethod(PairingMethod.DIRECT_SYSTEM) }
-                    .padding(vertical = 10.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "مساعد النظام (الاحتياطي) 🛡️",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 11.sp,
-                    color = if (uiState.selectedMethod == PairingMethod.DIRECT_SYSTEM) DarkBgPrimary else TextSecondary,
-                    textAlign = TextAlign.Center
-                )
-            }
-        }
+        // محدد طرق الربط الكبسولي فائق السلاسة
+        SegmentedPillSelector(
+            options = listOf(
+                PairingMethod.PAIRING_CODE to "كود الرقم 👑",
+                PairingMethod.QR_CODE to "رمز QR 📷",
+                PairingMethod.DIRECT_SYSTEM to "مساعد النظام 🛡️"
+            ),
+            selectedOption = uiState.selectedMethod,
+            onOptionSelected = { viewModel.selectMethod(it) },
+            activeColor = WhatsAppGreen
+        )
 
         // محتوى التبويب المختار
         when (uiState.selectedMethod) {
             PairingMethod.PAIRING_CODE -> {
                 // واجهة كود الاقتران عبر رقم الهاتف
-                GlassmorphicCard(modifier = Modifier.fillMaxWidth()) {
+                BentoCard(modifier = Modifier.fillMaxWidth()) {
                     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                         Text(
                             text = "أدخل رقم هاتفك لتوليد كود الاقتران المكون من 8 خانات:",
@@ -506,29 +453,30 @@ fun PairingScreen(
                                     )
 
                                     // زر فتح واتساب وزر نسخ الكود
-                                    Row(
+                                    Column(
                                         modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        verticalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
                                         Button(
                                             onClick = {
                                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                                 viewModel.openWhatsApp(context)
                                             },
-                                            modifier = Modifier.weight(1.2f),
+                                            modifier = Modifier.fillMaxWidth(),
                                             colors = ButtonDefaults.buttonColors(containerColor = WhatsAppGreen),
-                                            shape = RoundedCornerShape(12.dp)
+                                            shape = RoundedCornerShape(12.dp),
+                                            contentPadding = PaddingValues(vertical = 12.dp)
                                         ) {
                                             Icon(
                                                 imageVector = Icons.Filled.OpenInNew,
                                                 contentDescription = null,
                                                 tint = DarkBgPrimary,
-                                                modifier = Modifier.size(16.dp)
+                                                modifier = Modifier.size(18.dp)
                                             )
-                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Spacer(modifier = Modifier.width(8.dp))
                                             Text(
                                                 text = "فتح واتساب لإدخال الكود",
-                                                fontSize = 12.sp,
+                                                fontSize = 13.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 color = DarkBgPrimary
                                             )
@@ -542,17 +490,18 @@ fun PairingScreen(
                                                 clipboard.setPrimaryClip(clip)
                                                 android.widget.Toast.makeText(context, "تم نسخ الكود: $code", android.widget.Toast.LENGTH_SHORT).show()
                                             },
-                                            modifier = Modifier.weight(0.8f),
+                                            modifier = Modifier.fillMaxWidth(),
                                             colors = ButtonDefaults.outlinedButtonColors(contentColor = CyberCyan),
-                                            shape = RoundedCornerShape(12.dp)
+                                            shape = RoundedCornerShape(12.dp),
+                                            contentPadding = PaddingValues(vertical = 10.dp)
                                         ) {
                                             Icon(
                                                 Icons.Filled.ContentCopy,
                                                 contentDescription = null,
                                                 modifier = Modifier.size(16.dp)
                                             )
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            Text("نسخ الكود", fontSize = 12.sp)
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text("نسخ كود الاقتران", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold)
                                         }
                                     }
                                 }
@@ -770,55 +719,60 @@ fun ServiceStatusCard(
         color = DarkSurface,
         shape = RoundedCornerShape(16.dp)
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .size(42.dp)
-                    .clip(CircleShape)
-                    .background(if (isActive) activeColor.copy(alpha = 0.2f) else Color(0x1AFFFFFF)),
-                contentAlignment = Alignment.Center
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = if (isActive) activeColor else TextMuted,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
-
-            Column(modifier = Modifier.weight(1f)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(if (isActive) activeColor.copy(alpha = 0.2f) else Color(0x1AFFFFFF)),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = title,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = TextPrimary
-                    )
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .clip(CircleShape)
-                            .background(if (isActive) WhatsAppGreen else AmberWarning)
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = if (isActive) activeColor else TextMuted,
+                        modifier = Modifier.size(20.dp)
                     )
                 }
 
-                Spacer(modifier = Modifier.height(3.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = title,
+                            fontSize = 13.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = TextPrimary
+                        )
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(if (isActive) WhatsAppGreen else AmberWarning)
+                        )
+                    }
 
-                Text(
-                    text = description,
-                    fontSize = 11.sp,
-                    color = TextSecondary,
-                    lineHeight = 16.sp
-                )
+                    Spacer(modifier = Modifier.height(2.dp))
+
+                    Text(
+                        text = description,
+                        fontSize = 11.sp,
+                        color = TextSecondary,
+                        lineHeight = 15.sp
+                    )
+                }
             }
 
             Button(
@@ -826,12 +780,13 @@ fun ServiceStatusCard(
                 colors = ButtonDefaults.buttonColors(
                     containerColor = if (isActive) activeColor.copy(alpha = 0.15f) else WhatsAppGreen.copy(alpha = 0.2f)
                 ),
-                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                shape = RoundedCornerShape(10.dp)
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
                     text = actionButtonText,
-                    fontSize = 11.sp,
+                    fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     color = if (isActive) activeColor else WhatsAppGreen
                 )

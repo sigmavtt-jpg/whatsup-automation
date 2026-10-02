@@ -41,6 +41,9 @@ interface LogDao {
     @Query("SELECT * FROM activity_logs ORDER BY timestamp DESC LIMIT :limit")
     fun getRecentLogs(limit: Int): Flow<List<LogEntity>>
 
+    @Query("SELECT * FROM activity_logs WHERE timestamp >= :sinceTimestamp ORDER BY timestamp DESC")
+    fun getLogsSince(sinceTimestamp: Long): Flow<List<LogEntity>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertLog(log: LogEntity): Long
 
@@ -58,6 +61,9 @@ interface LogDao {
 
     @Query("DELETE FROM activity_logs WHERE status = 'NO_MATCH' OR actionExecuted LIKE '%تجاهل%'")
     suspend fun purgeClutterLogs(): Int
+
+    @Query("DELETE FROM activity_logs WHERE id NOT IN (SELECT id FROM activity_logs ORDER BY timestamp DESC LIMIT :keepCount)")
+    suspend fun pruneOldLogs(keepCount: Int = 1000): Int
 }
 
 /**

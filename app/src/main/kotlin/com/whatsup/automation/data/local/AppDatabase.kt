@@ -24,7 +24,7 @@ import com.whatsup.automation.data.local.entity.RuleEntity
         com.whatsup.automation.data.local.entity.GroupMemberEntity::class,
         com.whatsup.automation.data.local.entity.GroupLogEntity::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -42,6 +42,18 @@ abstract class AppDatabase : RoomDatabase() {
         val MIGRATION_4_5 = object : Migration(4, 5) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE statuses ADD COLUMN participant TEXT")
+            }
+        }
+
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_activity_logs_timestamp ON activity_logs (timestamp)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_activity_logs_senderPhone ON activity_logs (senderPhone)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_activity_logs_status ON activity_logs (status)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_statuses_timestamp ON statuses (timestamp)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_statuses_senderPhone ON statuses (senderPhone)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_statuses_isViewed ON statuses (isViewed)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_statuses_isReacted ON statuses (isReacted)")
             }
         }
 
@@ -72,7 +84,7 @@ abstract class AppDatabase : RoomDatabase() {
 
                 override fun onOpen(db: SupportSQLiteDatabase) {
                     super.onOpen(db)
-                    db.execSQL("DELETE FROM activity_logs WHERE status = 'NO_MATCH' OR actionExecuted LIKE '%تجاهل%'")
+                    db.execSQL("DELETE FROM activity_logs WHERE status = 'NO_MATCH' OR actionExecuted LIKE '%تجاهل%' OR senderPhone = 'null' OR senderPhone = '' OR senderPhone LIKE '%lid%'")
                 }
             }
         }

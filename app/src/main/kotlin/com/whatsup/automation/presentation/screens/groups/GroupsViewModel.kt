@@ -35,6 +35,7 @@ data class GroupsUiState(
     val activeDetailsTab: Int = 0, // 0 = الأعضاء وإدارتهم, 1 = سجل المستلمين (المنتهي), 2 = قيد الإرسال (الجاري)
     val broadcastTexts: Map<Long, String> = emptyMap(), // groupId -> broadcast message text
     val isBroadcastingMap: Map<Long, Boolean> = emptyMap(), // groupId -> boolean
+    val isPausedMap: Map<Long, Boolean> = emptyMap(), // groupId -> boolean
     val broadcastingProgress: Map<Long, Pair<Int, Int>> = emptyMap(), // groupId -> Pair(sent, total)
     val isAddMemberModalOpen: Boolean = false,
     val addMemberSearchQuery: String = "",
@@ -50,8 +51,24 @@ class GroupsViewModel @Inject constructor(
     private val deviceContactsManager: DeviceContactsManager,
     private val createPartitionedCampaignUseCase: CreatePartitionedCampaignUseCase,
     private val sendCampaignBroadcastUseCase: SendCampaignBroadcastUseCase,
-    private val manageGroupMembersUseCase: ManageGroupMembersUseCase
+    private val manageGroupMembersUseCase: ManageGroupMembersUseCase,
+    private val notificationRepository: com.whatsup.automation.domain.repository.NotificationRepository
 ) : ViewModel() {
+
+    val notifications = notificationRepository.notifications
+    val unreadNotificationsCount = notificationRepository.unreadCount
+
+    fun markNotificationsAsRead() {
+        viewModelScope.launch {
+            notificationRepository.markAllAsRead()
+        }
+    }
+
+    fun clearNotifications() {
+        viewModelScope.launch {
+            notificationRepository.clearAll()
+        }
+    }
 
     private val _uiState = MutableStateFlow(GroupsUiState())
     val uiState: StateFlow<GroupsUiState> = _uiState.asStateFlow()
@@ -318,6 +335,35 @@ class GroupsViewModel @Inject constructor(
         }
     }
 
+    fun pauseBroadcast(groupId: Long) {
+        sendCampaignBroadcastUseCase.pause(groupId)
+        _uiState.update { current ->
+            val pMap = current.isPausedMap.toMutableMap()
+            pMap[groupId] = true
+            current.copy(isPausedMap = pMap)
+        }
+    }
+
+    fun resumeBroadcast(groupId: Long) {
+        sendCampaignBroadcastUseCase.resume(groupId)
+        _uiState.update { current ->
+            val pMap = current.isPausedMap.toMutableMap()
+            pMap[groupId] = false
+            current.copy(isPausedMap = pMap)
+        }
+    }
+
+    fun cancelBroadcast(groupId: Long) {
+        sendCampaignBroadcastUseCase.cancel(groupId)
+        _uiState.update { current ->
+            val pMap = current.isPausedMap.toMutableMap()
+            pMap[groupId] = false
+            val bMap = current.isBroadcastingMap.toMutableMap()
+            bMap[groupId] = false
+            current.copy(isPausedMap = pMap, isBroadcastingMap = bMap)
+        }
+    }
+
     fun sendBroadcast(groupId: Long) {
         val text = _uiState.value.broadcastTexts[groupId]?.trim() ?: ""
         if (text.isBlank()) return
@@ -326,7 +372,20 @@ class GroupsViewModel @Inject constructor(
             _uiState.update { current ->
                 val broadMap = current.isBroadcastingMap.toMutableMap()
                 broadMap[groupId] = true
-                current.copy(isBroadcastingMap = broadMap)
+                val pauseMap = current.isPausedMap.toMutableMap()
+                pauseMap[groupId] = false
+                current.copy(isBroadcastingMap = broadMap, isPausedMap = pauseMap)
+            }
+
+            // مراقبة حالة الإيقاف المؤقت بالتزامن
+            val pauseObserverJob = launch {
+                sendCampaignBroadcastUseCase.isPaused(groupId).collect { isPaused ->
+                    _uiState.update { current ->
+                        val pMap = current.isPausedMap.toMutableMap()
+                        pMap[groupId] = isPaused
+                        current.copy(isPausedMap = pMap)
+                    }
+                }
             }
 
             sendCampaignBroadcastUseCase.execute(
@@ -341,13 +400,18 @@ class GroupsViewModel @Inject constructor(
                 }
             )
 
+            pauseObserverJob.cancel()
+
             _uiState.update { current ->
                 val broadMap = current.isBroadcastingMap.toMutableMap()
                 broadMap[groupId] = false
+                val pauseMap = current.isPausedMap.toMutableMap()
+                pauseMap[groupId] = false
                 val textsMap = current.broadcastTexts.toMutableMap()
                 textsMap[groupId] = ""
                 current.copy(
                     isBroadcastingMap = broadMap,
+                    isPausedMap = pauseMap,
                     broadcastTexts = textsMap,
                     isSuccessMessageShowing = true
                 )

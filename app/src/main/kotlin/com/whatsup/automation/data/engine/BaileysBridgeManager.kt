@@ -224,14 +224,47 @@ class BaileysBridgeManager @Inject constructor(
     }
 
     /**
-     * إرسال رسالة نصية عبر واتساب
+     * إرسال رسالة نصية عبر واتساب مع دعم محاكي السلوك البشري ودرع الحظر.
      */
-    suspend fun sendMessage(recipient: String, text: String, id: String = java.util.UUID.randomUUID().toString()): Boolean {
+    suspend fun sendMessage(
+        recipient: String,
+        text: String,
+        id: String = java.util.UUID.randomUUID().toString(),
+        typingDelayMs: Long? = null,
+        markRead: Boolean = false,
+        messageId: String? = null,
+        readDelayMs: Long? = null
+    ): Boolean {
         val cmd = JSONObject().apply {
             put("action", "SEND_MESSAGE")
             put("recipient", recipient)
             put("text", text)
             put("id", id)
+            if (typingDelayMs != null && typingDelayMs > 0) {
+                put("typingDelayMs", typingDelayMs)
+            }
+            if (markRead && !messageId.isNullOrBlank()) {
+                put("markRead", true)
+                put("messageId", messageId)
+                if (readDelayMs != null && readDelayMs > 0) {
+                    put("readDelayMs", readDelayMs)
+                }
+            }
+        }
+        return sendCommand(cmd)
+    }
+
+    /**
+     * إرسال تأكيد قراءة الرسالة لمحاكاة السلوك البشري.
+     */
+    suspend fun markMessageRead(chatJid: String, messageId: String, participant: String? = null): Boolean {
+        val cmd = JSONObject().apply {
+            put("action", "MARK_READ")
+            put("chatJid", chatJid)
+            put("messageId", messageId)
+            if (!participant.isNullOrBlank()) {
+                put("participant", participant)
+            }
         }
         return sendCommand(cmd)
     }

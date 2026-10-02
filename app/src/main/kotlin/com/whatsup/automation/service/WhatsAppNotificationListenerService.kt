@@ -64,6 +64,7 @@ class WhatsAppNotificationListenerService : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         if (sbn == null) return
+        if (whatsAppEngine.isAutomationPaused.value) return
 
         val pkg = sbn.packageName ?: return
         if (pkg != WHATSAPP_PKG && pkg != WHATSAPP_BIZ_PKG) return
@@ -105,13 +106,15 @@ class WhatsAppNotificationListenerService : NotificationListenerService() {
         }
         processedMessageCache.add(cacheKey)
 
-        // استخراج رقم الهاتف الحقيقي (إذا كان العنوان اسم شخص، نبحث عنه في جهات اتصال الهاتف)
-        val cleanDigits = title.replace("[^0-9]".toRegex(), "")
-        val senderPhone = if (cleanDigits.length >= 7) {
-            deviceContactsManager.normalizePhoneNumber(title)
-        } else {
-            val phoneFromName = deviceContactsManager.findPhoneByName(title)
-            if (phoneFromName != null) deviceContactsManager.normalizePhoneNumber(phoneFromName) else title
+        // استخراج رقم الهاتف الحقيقي بكل الطرق الممكنة لمنع وصول أرقام فارغة
+        val senderPhone = extractSenderPhone(sbn, notification, extras, title, text)
+        val phoneDigits = senderPhone.replace("[^0-9]".toRegex(), "")
+
+        // السيادة المطلقة لمحرك Baileys JID:
+        // إذا كان محرك Baileys متصلاً أو كان الإشعار يحمل اسماً فقط بدون أرقام (أقل من 7 خانات)،
+        // يُحظر حجز الرسالة عبر الإشعارات وتُترك كلياً لمحرك Baileys JID الذي يملك الرقم الفعلي الموثوق 100%.
+        if (whatsAppEngine.isMasterEngineConnected() || phoneDigits.length < 7) {
+            return
         }
 
         val incomingMessage = IncomingMessage(
@@ -147,13 +150,10 @@ class WhatsAppNotificationListenerService : NotificationListenerService() {
                             is ActionResult.ReplySent -> {
                                 if (actionResult.message.isNotBlank()) {
                                     var sent = false
-                                    if (whatsAppEngine.isMasterEngineConnected()) {
-                                        sent = whatsAppEngine.sendMessage(incomingMessage.senderPhone, actionResult.message)
-                                    }
-                                    if (!sent && quickReply != null) {
+                                    if (quickReply != null) {
                                         sent = sendActualReply(applicationContext, quickReply.first, quickReply.second, actionResult.message)
                                     }
-                                    if (!sent && !whatsAppEngine.isMasterEngineConnected()) {
+                                    if (!sent) {
                                         whatsAppEngine.sendMessage(incomingMessage.senderPhone, actionResult.message)
                                     }
                                 }
@@ -203,6 +203,72 @@ class WhatsAppNotificationListenerService : NotificationListenerService() {
         } catch (_: Exception) {
             false
         }
+    }
+
+    /**
+     * استخراج رقم الهاتف الحقيقي بكل الطرق الممكنة من وسائط الإشعار المختلفة.
+     */
+    private fun extractSenderPhone(
+        sbn: StatusBarNotification,
+        notification: Notification,
+        extras: Bundle,
+        title: String,
+        text: String
+    ): String {
+        // 1. فحص العنوان أولاً إذا كان رقماً صريحاً
+        val titleDigits = title.replace("[^0-9]".toRegex(), "")
+        if (titleDigits.length >= 7) {
+            return deviceContactsManager.normalizePhoneNumber(title)
+        }
+
+        // 2. فحص tag الخاص بإشعار واتساب (يحتوي غالباً على JID أو رقم الهاتف)
+        val tag = sbn.tag ?: ""
+        val tagDigits = tag.replace("[^0-9]".toRegex(), "")
+        if (tagDigits.length >= 7 && !tagDigits.startsWith("97517970702387")) {
+            return deviceContactsManager.normalizePhoneNumber(tagDigits)
+        }
+
+        // 3. فحص مفتاح الإشعار (sbn.key)
+        val key = sbn.key ?: ""
+        val keyDigits = key.split('|', ':', ';', '_')
+            .map { it.replace("[^0-9]".toRegex(), "") }
+            .firstOrNull { it.length in 8..15 && !it.startsWith("97517970702387") }
+        if (keyDigits != null) {
+            return deviceContactsManager.normalizePhoneNumber(keyDigits)
+        }
+
+        // 4. فحص روابط tel: في كائنات Person المدمجة بالإشعار
+        try {
+            val peopleList = extras.get("android.people.list")
+            if (peopleList is List<*>) {
+                for (p in peopleList) {
+                    val pStr = p.toString()
+                    if (pStr.contains("tel:")) {
+                        val tel = pStr.substringAfter("tel:").substringBefore('&').substringBefore(';')
+                        val clean = tel.replace("[^0-9]".toRegex(), "")
+                        if (clean.length >= 7) {
+                            return deviceContactsManager.normalizePhoneNumber(clean)
+                        }
+                    }
+                }
+            }
+        } catch (_: Throwable) {}
+
+        // 5. البحث بالاسم في دفتر الهاتف
+        val phoneFromName = deviceContactsManager.findPhoneByName(title)
+        if (phoneFromName != null && phoneFromName.replace("[^0-9]".toRegex(), "").length >= 7) {
+            return deviceContactsManager.normalizePhoneNumber(phoneFromName)
+        }
+
+        // 6. استخراج رقم هاتف من نص الرسالة إن وجد (مثل "سجلني 771234567")
+        val phoneInTextRegex = Regex("""\b(?:\+?967|00967|0)?[713][0-9]{7,8}\b|\b\+[0-9]{8,15}\b""")
+        val matchInText = phoneInTextRegex.find(text)
+        if (matchInText != null) {
+            val extracted = matchInText.value
+            return deviceContactsManager.normalizePhoneNumber(extracted)
+        }
+
+        return title
     }
 
     override fun onDestroy() {

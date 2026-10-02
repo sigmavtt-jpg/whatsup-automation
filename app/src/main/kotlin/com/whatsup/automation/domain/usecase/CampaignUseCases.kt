@@ -75,6 +75,11 @@ class SendCampaignBroadcastUseCase @Inject constructor(
         )
     }
 
+    fun isPaused(groupId: Long): kotlinx.coroutines.flow.Flow<Boolean> = groupRepository.isBroadcastPaused(groupId)
+    fun pause(groupId: Long) = groupRepository.pauseBroadcast(groupId)
+    fun resume(groupId: Long) = groupRepository.resumeBroadcast(groupId)
+    fun cancel(groupId: Long) = groupRepository.cancelBroadcast(groupId)
+
     /**
      * حساب الوقت التقديري بناءً على فواصل الأمان العشوائية وفترات الاستراحة.
      */

@@ -92,6 +92,26 @@ export function createCommandDispatcher({ getSocket, startSession, getAuthFolder
                     break;
                 }
 
+                case 'MARK_READ': {
+                    if (sock && command.chatJid && command.messageId) {
+                        try {
+                            const cleanPhone = String(command.chatJid).replace(/[^0-9]/g, '');
+                            const rawJid = command.chatJid.includes('@') ? command.chatJid : `${cleanPhone}@s.whatsapp.net`;
+                            const jid = jidNormalizedUser(rawJid);
+                            const key = {
+                                remoteJid: jid,
+                                id: command.messageId,
+                                fromMe: false
+                            };
+                            if (command.participant) {
+                                key.participant = jidNormalizedUser(command.participant);
+                            }
+                            await sock.readMessages([key]);
+                        } catch (_) {}
+                    }
+                    break;
+                }
+
                 case 'SEND_MESSAGE': {
                     if (sock && command.recipient && command.text) {
                         const cleanRecipient = String(command.recipient).replace(/[^0-9]/g, '');
@@ -101,11 +121,24 @@ export function createCommandDispatcher({ getSocket, startSession, getAuthFolder
                         }
                         const jid = jidNormalizedUser(rawJid);
                         try {
-                            // Typing indicator for natural interaction
-                            await sock.sendPresenceUpdate('composing', jid);
-                            const humanDelay = 1200 + Math.floor(Math.random() * 1500);
-                            await new Promise(r => setTimeout(r, humanDelay));
-                            await sock.sendPresenceUpdate('paused', jid);
+                            // If markRead is requested before sending (Human reading behavior)
+                            if (command.markRead && command.messageId) {
+                                try {
+                                    await sock.readMessages([{ remoteJid: jid, id: command.messageId, fromMe: false }]);
+                                } catch (_) {}
+                                const readDelay = command.readDelayMs ? Number(command.readDelayMs) : 0;
+                                if (readDelay > 0) {
+                                    await new Promise(r => setTimeout(r, readDelay));
+                                }
+                            }
+
+                            // Typing indicator for natural human behavior
+                            const typingDuration = command.typingDelayMs ? Number(command.typingDelayMs) : (1200 + Math.floor(Math.random() * 1500));
+                            if (typingDuration > 0) {
+                                await sock.sendPresenceUpdate('composing', jid);
+                                await new Promise(r => setTimeout(r, typingDuration));
+                                await sock.sendPresenceUpdate('paused', jid);
+                            }
 
                             const msgPayload = { text: command.text };
                             const sentResult = await sock.sendMessage(jid, msgPayload);

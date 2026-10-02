@@ -70,12 +70,26 @@ class LogRepositoryImpl @Inject constructor(
         return logDao.getRecentLogs(limit).map { list -> list.map { it.toDomain() } }
     }
 
+    private var insertCounter = 0
+
     override suspend fun insertLog(log: ActivityLog): Long {
-        return logDao.insertLog(log.toEntity())
+        val id = logDao.insertLog(log.toEntity())
+        insertCounter++
+        if (insertCounter >= 50) {
+            insertCounter = 0
+            try {
+                logDao.pruneOldLogs(1000)
+            } catch (_: Exception) {}
+        }
+        return id
     }
 
     override suspend fun clearAllLogs() {
         logDao.clearAllLogs()
+    }
+
+    override suspend fun pruneOldLogs(keepCount: Int): Int {
+        return logDao.pruneOldLogs(keepCount)
     }
 
     override suspend fun getStats(): DashboardStats {
@@ -322,8 +336,33 @@ class GroupRepositoryImpl @Inject constructor(
     private val groupMemberDao: com.whatsup.automation.data.local.dao.GroupMemberDao,
     private val groupLogDao: com.whatsup.automation.data.local.dao.GroupLogDao,
     private val whatsAppEngine: com.whatsup.automation.data.engine.WhatsAppEngine,
-    private val logRepository: LogRepository
+    private val logRepository: LogRepository,
+    private val notificationRepository: com.whatsup.automation.domain.repository.NotificationRepository
 ) : com.whatsup.automation.domain.repository.GroupRepository {
+
+    private val pausedMap = java.util.concurrent.ConcurrentHashMap<Long, kotlinx.coroutines.flow.MutableStateFlow<Boolean>>()
+    private val canceledMap = java.util.concurrent.ConcurrentHashMap<Long, Boolean>()
+
+    private fun getPauseState(groupId: Long): kotlinx.coroutines.flow.MutableStateFlow<Boolean> {
+        return pausedMap.computeIfAbsent(groupId) { kotlinx.coroutines.flow.MutableStateFlow(false) }
+    }
+
+    override fun isBroadcastPaused(groupId: Long): Flow<Boolean> {
+        return getPauseState(groupId)
+    }
+
+    override fun pauseBroadcast(groupId: Long) {
+        getPauseState(groupId).value = true
+    }
+
+    override fun resumeBroadcast(groupId: Long) {
+        getPauseState(groupId).value = false
+    }
+
+    override fun cancelBroadcast(groupId: Long) {
+        canceledMap[groupId] = true
+        getPauseState(groupId).value = false
+    }
 
     override fun getAllGroups(): Flow<List<Group>> {
         return groupDao.getAllGroupsWithMemberCount().map { list ->
@@ -445,11 +484,55 @@ class GroupRepositoryImpl @Inject constructor(
         val members = groupMemberDao.getMembersForGroupSync(groupId)
         val group = groupDao.getGroupById(groupId) ?: return
 
+        canceledMap[groupId] = false
+        val pauseState = getPauseState(groupId)
+        pauseState.value = false
+
+        notificationRepository.postNotification(
+            title = "بدء حملة البث الجماعي 🚀",
+            message = "جارٍ إرسال الحملة (${group.name}) إلى ${members.size} مستلم مع تنويع النصوص وحماية الأمان.",
+            type = NotificationType.INFO
+        )
+
+        var consecutiveErrors = 0
+        var totalSuccess = 0
+
         for ((index, member) in members.withIndex()) {
+            if (canceledMap[groupId] == true) {
+                notificationRepository.postNotification(
+                    title = "إلغاء البث الجماعي ⏹️",
+                    message = "تم إيقاف حملة (${group.name}) يدوياً.",
+                    type = NotificationType.WARNING
+                )
+                break
+            }
+
+            // فحص الإيقاف المؤقت (Pause & Resume Loop)
+            while (pauseState.value) {
+                if (canceledMap[groupId] == true) break
+                kotlinx.coroutines.delay(1000)
+            }
+
+            if (canceledMap[groupId] == true) break
+
+            // 1. توليد القالب المناسب حسب الدفعة والدوران (Batch Rotation)
+            val selectedTemplate = com.whatsup.automation.domain.util.SpintaxEngine.getTemplateForIndex(
+                rawText = messageText,
+                recipientIndex = index,
+                batchSize = 10
+            )
+
+            // 2. فك Spintax وتوليد نص مخصص ومميز لكل مستلم
+            val personalizedMessage = com.whatsup.automation.domain.util.SpintaxEngine.process(
+                template = selectedTemplate,
+                recipientName = member.contactName,
+                recipientPhone = member.phone
+            )
+
             val logId = groupLogDao.insertLog(
                 com.whatsup.automation.data.local.entity.GroupLogEntity(
                     groupId = groupId,
-                    messageText = messageText,
+                    messageText = personalizedMessage,
                     recipientPhone = member.phone,
                     recipientName = member.contactName,
                     status = GroupLogStatus.IN_PROGRESS.name,
@@ -458,8 +541,10 @@ class GroupRepositoryImpl @Inject constructor(
             )
 
             try {
-                val sent = whatsAppEngine.sendMessage(member.phone, messageText)
+                val sent = whatsAppEngine.sendMessage(member.phone, personalizedMessage)
                 if (sent) {
+                    consecutiveErrors = 0
+                    totalSuccess++
                     groupLogDao.updateLogStatus(
                         id = logId,
                         status = GroupLogStatus.COMPLETED.name,
@@ -469,13 +554,14 @@ class GroupRepositoryImpl @Inject constructor(
                     logRepository.insertLog(
                         ActivityLog(
                             senderPhone = member.phone,
-                            messageText = messageText,
+                            messageText = personalizedMessage,
                             matchedRule = "رسالة بث للمجموعة (${group.name})",
                             actionExecuted = "تم الإرسال لـ ${member.contactName}",
                             status = LogStatus.SUCCESS
                         )
                     )
                 } else {
+                    consecutiveErrors++
                     groupLogDao.updateLogStatus(
                         id = logId,
                         status = GroupLogStatus.COMPLETED.name,
@@ -485,7 +571,7 @@ class GroupRepositoryImpl @Inject constructor(
                     logRepository.insertLog(
                         ActivityLog(
                             senderPhone = member.phone,
-                            messageText = messageText,
+                            messageText = personalizedMessage,
                             matchedRule = "رسالة بث للمجموعة (${group.name})",
                             actionExecuted = "تمت الجدولة لـ ${member.contactName}",
                             status = LogStatus.SUCCESS
@@ -493,6 +579,7 @@ class GroupRepositoryImpl @Inject constructor(
                     )
                 }
             } catch (e: Exception) {
+                consecutiveErrors++
                 groupLogDao.updateLogStatus(
                     id = logId,
                     status = GroupLogStatus.FAILED.name,
@@ -502,7 +589,7 @@ class GroupRepositoryImpl @Inject constructor(
                 logRepository.insertLog(
                     ActivityLog(
                         senderPhone = member.phone,
-                        messageText = messageText,
+                        messageText = personalizedMessage,
                         matchedRule = "رسالة بث للمجموعة (${group.name})",
                         actionExecuted = "فشل الإرسال لـ ${member.contactName}: ${e.message}",
                         status = LogStatus.FAILURE
@@ -510,18 +597,37 @@ class GroupRepositoryImpl @Inject constructor(
                 )
             }
 
+            // فحص الإيقاف التلقائي الذكي عند توالي الأخطاء (Auto-Pause on Consecutive Errors)
+            if (consecutiveErrors >= 3) {
+                pauseState.value = true
+                notificationRepository.postNotification(
+                    title = "توقف البث التلقائي مؤقتاً ⚠️",
+                    message = "تم إيقاف حملة (${group.name}) مؤقتاً بعد 3 أخطاء متتالية لحماية الحساب. يمكنك الاستئناف عند جاهزية الشبكة.",
+                    type = NotificationType.WARNING
+                )
+            }
+
             onProgress?.invoke(index + 1, members.size)
 
-            // درع مكافحة الحظر: فاصل زمني عشوائي بين 4 إلى 9 ثوانٍ بين كل رسالة
+            // درع مكافحة الحظر: فاصل زمني عشوائي طبيعي (5 إلى 14 ثانية) بين كل رسالة
             if (index < members.size - 1) {
-                val randomDelay = kotlin.random.Random.nextLong(4000, 9000)
+                val randomDelay = kotlin.random.Random.nextLong(5000, 14000)
                 kotlinx.coroutines.delay(randomDelay)
 
-                // استراحة كل 25 رسالة
+                // استراحة راحة طبيعية كل 25 رسالة (45 إلى 60 ثانية)
                 if ((index + 1) % 25 == 0) {
-                    kotlinx.coroutines.delay(20000)
+                    val restDelay = kotlin.random.Random.nextLong(45000, 60000)
+                    kotlinx.coroutines.delay(restDelay)
                 }
             }
+        }
+
+        if (canceledMap[groupId] != true) {
+            notificationRepository.postNotification(
+                title = "اكتملت حملة البث الجماعي 🎉",
+                message = "تم الانتهاء من إرسال حملة (${group.name}) بنجاح لكافة المستلمين.",
+                type = NotificationType.SUCCESS
+            )
         }
     }
 }
@@ -574,6 +680,8 @@ class ContactFormattingRepositoryImpl @Inject constructor(
         const val KEY_SUFFIX = "formatting_suffix"
         const val KEY_TAG = "formatting_tag"
         const val KEY_EMOJI = "formatting_emoji"
+        const val KEY_KEYWORDS = "formatting_keywords"
+        const val KEY_REPLY_MSG = "formatting_reply_msg"
     }
 
     private val prefs = context.getSharedPreferences(PREFS_NAME, android.content.Context.MODE_PRIVATE)
@@ -581,10 +689,13 @@ class ContactFormattingRepositoryImpl @Inject constructor(
     private val settingsFlow = kotlinx.coroutines.flow.MutableStateFlow(
         com.whatsup.automation.domain.model.ContactFormattingSettings(
             isEnabled = prefs.getBoolean(KEY_IS_ENABLED, true),
+            customPrefix = prefs.getString(KEY_PREFIX, "") ?: "",
             prefix = prefs.getString(KEY_PREFIX, "") ?: "",
             suffix = prefs.getString(KEY_SUFFIX, "") ?: "",
-            customTag = prefs.getString(KEY_TAG, "جهات نشر") ?: "جهات نشر",
-            customEmoji = prefs.getString(KEY_EMOJI, "❤️") ?: "❤️"
+            customTag = prefs.getString(KEY_TAG, "") ?: "",
+            customEmoji = prefs.getString(KEY_EMOJI, "") ?: "",
+            triggerKeywords = prefs.getString(KEY_KEYWORDS, "سجلني، احفظني، سجل اسمي، احفظ رقمي، اسمي") ?: "سجلني، احفظني، سجل اسمي، احفظ رقمي، اسمي",
+            replyMessage = prefs.getString(KEY_REPLY_MSG, "تم حفظك باسم {name} بنجاح ✅") ?: "تم حفظك باسم {name} بنجاح ✅"
         )
     )
 
@@ -595,14 +706,70 @@ class ContactFormattingRepositoryImpl @Inject constructor(
     override suspend fun updateSettings(settings: com.whatsup.automation.domain.model.ContactFormattingSettings) {
         prefs.edit()
             .putBoolean(KEY_IS_ENABLED, settings.isEnabled)
-            .putString(KEY_PREFIX, settings.prefix)
+            .putString(KEY_PREFIX, settings.customPrefix)
             .putString(KEY_SUFFIX, settings.suffix)
             .putString(KEY_TAG, settings.customTag)
             .putString(KEY_EMOJI, settings.customEmoji)
+            .putString(KEY_KEYWORDS, settings.triggerKeywords)
+            .putString(KEY_REPLY_MSG, settings.replyMessage)
             .apply()
         settingsFlow.value = settings
     }
 }
 
+/**
+ * تنفيذ مستودع إعدادات درع الحماية ومحاكي السلوك البشري عبر SharedPreferences.
+ */
+@Singleton
+class AntiBanRepositoryImpl @Inject constructor(
+    @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context
+) : com.whatsup.automation.domain.repository.AntiBanRepository {
 
+    private companion object {
+        const val PREFS_NAME = "whatsup_antiban_settings"
+        const val KEY_IS_ENABLED = "antiban_is_enabled"
+        const val KEY_SIMULATE_READING = "antiban_simulate_reading"
+        const val KEY_READ_DELAY_MIN = "antiban_read_delay_min"
+        const val KEY_READ_DELAY_MAX = "antiban_read_delay_max"
+        const val KEY_DYNAMIC_TYPING = "antiban_dynamic_typing"
+        const val KEY_TYPING_SPEED = "antiban_typing_speed"
+        const val KEY_COOLDOWN_SEC = "antiban_cooldown_sec"
+        const val KEY_MAX_REPLIES = "antiban_max_replies"
+        const val KEY_WINDOW_MIN = "antiban_window_min"
+    }
 
+    private val prefs = context.getSharedPreferences(PREFS_NAME, android.content.Context.MODE_PRIVATE)
+
+    private val settingsFlow = kotlinx.coroutines.flow.MutableStateFlow(
+        com.whatsup.automation.domain.model.AntiBanSettings(
+            isEnabled = prefs.getBoolean(KEY_IS_ENABLED, true),
+            simulateReading = prefs.getBoolean(KEY_SIMULATE_READING, true),
+            readDelayMinMs = prefs.getLong(KEY_READ_DELAY_MIN, 800L),
+            readDelayMaxMs = prefs.getLong(KEY_READ_DELAY_MAX, 2000L),
+            dynamicTypingSpeed = prefs.getBoolean(KEY_DYNAMIC_TYPING, true),
+            typingSpeedCharMs = prefs.getLong(KEY_TYPING_SPEED, 35L),
+            contactCooldownSeconds = prefs.getInt(KEY_COOLDOWN_SEC, 12),
+            maxRepliesPerWindow = prefs.getInt(KEY_MAX_REPLIES, 4),
+            windowMinutes = prefs.getInt(KEY_WINDOW_MIN, 10)
+        )
+    )
+
+    override fun getSettings(): Flow<com.whatsup.automation.domain.model.AntiBanSettings> {
+        return settingsFlow
+    }
+
+    override suspend fun updateSettings(settings: com.whatsup.automation.domain.model.AntiBanSettings) {
+        prefs.edit()
+            .putBoolean(KEY_IS_ENABLED, settings.isEnabled)
+            .putBoolean(KEY_SIMULATE_READING, settings.simulateReading)
+            .putLong(KEY_READ_DELAY_MIN, settings.readDelayMinMs)
+            .putLong(KEY_READ_DELAY_MAX, settings.readDelayMaxMs)
+            .putBoolean(KEY_DYNAMIC_TYPING, settings.dynamicTypingSpeed)
+            .putLong(KEY_TYPING_SPEED, settings.typingSpeedCharMs)
+            .putInt(KEY_COOLDOWN_SEC, settings.contactCooldownSeconds)
+            .putInt(KEY_MAX_REPLIES, settings.maxRepliesPerWindow)
+            .putInt(KEY_WINDOW_MIN, settings.windowMinutes)
+            .apply()
+        settingsFlow.value = settings
+    }
+}

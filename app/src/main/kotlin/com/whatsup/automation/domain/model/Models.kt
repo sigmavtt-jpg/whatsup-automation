@@ -209,12 +209,14 @@ data class GroupWithMembers(
  * إعدادات تنسيق وتوسيم أسماء جهات الاتصال التلقائية عند الحفظ في دفتر الهاتف.
  */
 data class ContactFormattingSettings(
-    val isEnabled: Boolean = false,
+    val isEnabled: Boolean = true,
     val customPrefix: String = "",
     val prefix: String = "",
     val suffix: String = "",
     val customTag: String = "",
-    val customEmoji: String = ""
+    val customEmoji: String = "",
+    val triggerKeywords: String = "سجلني، احفظني، سجل اسمي، احفظ رقمي، اسمي",
+    val replyMessage: String = "تم حفظك باسم {name} بنجاح ✅"
 ) {
     /**
      * تشكيل وتنسيق الاسم ليتم حفظه في دفتر جهات اتصال الهاتف الفعلي (ContactsContract).
@@ -239,5 +241,41 @@ data class ContactFormattingSettings(
     }
 }
 
+/**
+ * إعدادات درع الحماية ومحاكي السلوك البشري لمنع الحظر.
+ */
+data class AntiBanSettings(
+    val isEnabled: Boolean = true,
+    val simulateReading: Boolean = true,
+    val readDelayMinMs: Long = 800L,
+    val readDelayMaxMs: Long = 2000L,
+    val dynamicTypingSpeed: Boolean = true,
+    val typingSpeedCharMs: Long = 35L,
+    val contactCooldownSeconds: Int = 12,
+    val maxRepliesPerWindow: Int = 4,
+    val windowMinutes: Int = 10
+) {
+    /**
+     * حساب التأخير البشري المطلوب لمحاكاة كتابة النص بناءً على طوله.
+     */
+    fun calculateTypingDelayMs(text: String): Long {
+        if (!isEnabled) return 0L
+        val baseDelay = if (dynamicTypingSpeed) {
+            val length = text.length.coerceIn(5, 400)
+            (length * typingSpeedCharMs).coerceIn(1200L, 7000L)
+        } else {
+            1500L
+        }
+        val jitter = (Math.random() * 800).toLong()
+        return baseDelay + jitter
+    }
 
-
+    /**
+     * حساب وقت استيعاب وقراءة الرسالة قبل البدء بالكتابة.
+     */
+    fun calculateReadDelayMs(): Long {
+        if (!isEnabled || !simulateReading) return 0L
+        val diff = (readDelayMaxMs - readDelayMinMs).coerceAtLeast(100L)
+        return readDelayMinMs + (Math.random() * diff).toLong()
+    }
+}

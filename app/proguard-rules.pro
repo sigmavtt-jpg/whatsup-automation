@@ -41,3 +41,16 @@
     native <methods>;
 }
 -keep class com.whatsup.automation.data.engine.NodeRunner { *; }
+
+# 8. Google LibPhoneNumber & ZXing
+-keep class io.michaelrocks.libphonenumber.android.** { *; }
+-dontwarn io.michaelrocks.libphonenumber.android.**
+-keep class com.google.zxing.** { *; }
+-dontwarn com.google.zxing.**
+
+# 9. Google Crypto & ErrorProne Annotations
+-dontwarn com.google.errorprone.annotations.**
+-dontwarn com.google.crypto.tink.**
+-keep class com.google.crypto.tink.** { *; }
+
+

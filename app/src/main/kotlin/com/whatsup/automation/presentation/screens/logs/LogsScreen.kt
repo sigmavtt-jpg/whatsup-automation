@@ -44,6 +44,9 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
+import com.whatsup.automation.presentation.components.BentoCard
+import com.whatsup.automation.presentation.theme.ObsidianGlowBorder
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LogsScreen(
@@ -60,7 +63,6 @@ fun LogsScreen(
         ConversationDetailDialog(
             conversation = conversation,
             onDismiss = { viewModel.closeConversation() },
-            
         )
     }
 
@@ -91,13 +93,13 @@ fun LogsScreen(
                 ) {
                     Column {
                         Text(
-                            text = "سجل المحادثات والنشاط",
+                            text = "الإعدادات وسجل النشاط",
                             fontSize = 24.sp,
                             fontWeight = FontWeight.Bold,
                             color = TextPrimary
                         )
                         Text(
-                            text = "عرض المحادثات، الردود التلقائية، وحفظ جهات الاتصال",
+                            text = "درع الحماية، محاكي السلوك البشري، وسجلات العمليات الحية",
                             fontSize = 12.sp,
                             color = TextSecondary
                         )
@@ -113,7 +115,7 @@ fun LogsScreen(
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 val report = viewModel.generateDiagnosticReport()
                                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                val clip = ClipData.newPlainText("WhatsUp Diagnostic Report", report)
+                                val clip = ClipData.newPlainText("SIGMACODEX Diagnostic Report", report)
                                 clipboard.setPrimaryClip(clip)
                                 Toast.makeText(context, "تم نسخ التقرير التشخيصي إلى الحافظة بنجاح 📋", Toast.LENGTH_SHORT).show()
                             },
@@ -137,6 +139,201 @@ fun LogsScreen(
                                     .background(RoseError.copy(alpha = 0.15f))
                             ) {
                                 Icon(Icons.Filled.DeleteSweep, contentDescription = "مسح السجل", tint = RoseError)
+                            }
+                        }
+                    }
+                }
+            }
+
+            // بطاقة درع الحماية ومحاكي السلوك البشري (Anti-Ban Shield) في تبويب الإعدادات
+            item {
+                val antiBan = uiState.antiBanSettings
+
+                BentoCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    borderBrush = ObsidianGlowBorder.Emerald
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .background(WhatsAppGreen.copy(alpha = 0.18f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        Icons.Filled.Shield,
+                                        contentDescription = null,
+                                        tint = WhatsAppGreen,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                                Column {
+                                    Text(
+                                        text = "درع الحماية ومحاكي السلوك البشري",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 15.sp,
+                                        color = TextPrimary
+                                    )
+                                    Text(
+                                        text = "محاكاة القراءة والكتابة الطبيعية ومنع الحظر",
+                                        fontSize = 11.sp,
+                                        color = TextSecondary
+                                    )
+                                }
+                            }
+
+                            Switch(
+                                checked = antiBan.isEnabled,
+                                onCheckedChange = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    viewModel.updateAntiBanSettings(antiBan.copy(isEnabled = it))
+                                },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Color.White,
+                                    checkedTrackColor = WhatsAppGreen,
+                                    uncheckedThumbColor = TextMuted,
+                                    uncheckedTrackColor = DarkBgSecondary
+                                )
+                            )
+                        }
+
+                        if (antiBan.isEnabled) {
+                            HorizontalDivider(color = Color(0x15FFFFFF))
+
+                            // خيار محاكاة القراءة
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("محاكاة قراءة الرسالة (Mark Read)", fontSize = 13.sp, color = TextPrimary, fontWeight = FontWeight.Medium)
+                                    Text("تأكيد القراءة ثم الانتظار لحظات قبل البدء بالكتابة", fontSize = 11.sp, color = TextSecondary)
+                                }
+                                Switch(
+                                    checked = antiBan.simulateReading,
+                                    onCheckedChange = {
+                                        viewModel.updateAntiBanSettings(antiBan.copy(simulateReading = it))
+                                    },
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = Color.White,
+                                        checkedTrackColor = CyberCyan,
+                                        uncheckedThumbColor = TextMuted,
+                                        uncheckedTrackColor = DarkBgSecondary
+                                    )
+                                )
+                            }
+
+                            // خيار سرعة الكتابة المتناسبة
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("كتابة ديناميكية متناسبة مع طول النص", fontSize = 13.sp, color = TextPrimary, fontWeight = FontWeight.Medium)
+                                    Text("إظهار 'يكتب الآن...' لفترة تتطابق مع عدد حروف الرد", fontSize = 11.sp, color = TextSecondary)
+                                }
+                                Switch(
+                                    checked = antiBan.dynamicTypingSpeed,
+                                    onCheckedChange = {
+                                        viewModel.updateAntiBanSettings(antiBan.copy(dynamicTypingSpeed = it))
+                                    },
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = Color.White,
+                                        checkedTrackColor = CyberCyan,
+                                        uncheckedThumbColor = TextMuted,
+                                        uncheckedTrackColor = DarkBgSecondary
+                                    )
+                                )
+                            }
+
+                            HorizontalDivider(color = Color(0x10FFFFFF))
+
+                            // منزلق فترة التهدئة بين الردود
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text("فترة التهدئة بين الردود لنفس الرقم:", fontSize = 12.sp, color = TextSecondary)
+                                    Text("${antiBan.contactCooldownSeconds} ثانية", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = WhatsAppGreen)
+                                }
+                                Slider(
+                                    value = antiBan.contactCooldownSeconds.toFloat(),
+                                    onValueChange = {
+                                        viewModel.updateAntiBanSettings(antiBan.copy(contactCooldownSeconds = it.toInt()))
+                                    },
+                                    valueRange = 5f..60f,
+                                    steps = 10,
+                                    colors = SliderDefaults.colors(
+                                        thumbColor = WhatsAppGreen,
+                                        activeTrackColor = WhatsAppGreen,
+                                        inactiveTrackColor = Color(0x22FFFFFF)
+                                    )
+                                )
+                            }
+
+                            // منزلق سقف الردود لمنع الحلقات
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text("أقصى عدد ردود لنفس الرقم خلال 10 دقائق:", fontSize = 12.sp, color = TextSecondary)
+                                    Text("${antiBan.maxRepliesPerWindow} ردود", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = NeonPurple)
+                                }
+                                Slider(
+                                    value = antiBan.maxRepliesPerWindow.toFloat(),
+                                    onValueChange = {
+                                        viewModel.updateAntiBanSettings(antiBan.copy(maxRepliesPerWindow = it.toInt()))
+                                    },
+                                    valueRange = 1f..10f,
+                                    steps = 8,
+                                    colors = SliderDefaults.colors(
+                                        thumbColor = NeonPurple,
+                                        activeTrackColor = NeonPurple,
+                                        inactiveTrackColor = Color(0x22FFFFFF)
+                                    )
+                                )
+                            }
+
+                            // شارة الحالة
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(WhatsAppGreen.copy(alpha = 0.1f))
+                                    .border(1.dp, WhatsAppGreen.copy(alpha = 0.25f), RoundedCornerShape(10.dp))
+                                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Filled.CheckCircle,
+                                        contentDescription = null,
+                                        tint = WhatsAppGreen,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Text(
+                                        text = "الدرع مفعّل: محصن ضد الحظر والحلقات اللانهائية",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = WhatsAppGreen
+                                    )
+                                }
                             }
                         }
                     }

@@ -108,8 +108,15 @@ export async function resolvePhoneAndLid(jidOrPhone, msg = null, sock = null) {
     const isLid = rawStr.includes('@lid') || isLidJidOrNumber(rawStr) || isLidJidOrNumber(cleanDigits);
 
     if (isLid) {
-        // 1. Check if message object directly contains participantPn or remoteJidPn
-        const foundPn = msg?.key?.participantPn || msg?.key?.remoteJidPn || msg?.participantPn || msg?.pnJid;
+        // 1. Check if message object directly contains senderPn, participantPn, etc.
+        const foundPn = msg?.key?.senderPn || 
+                        msg?.key?.sender_pn || 
+                        msg?.key?.participantPn || 
+                        msg?.key?.participant_pn || 
+                        msg?.key?.remoteJidPn || 
+                        msg?.participantPn || 
+                        msg?.senderPn ||
+                        msg?.pnJid;
         if (foundPn) {
             const cleanPn = String(foundPn).split('@')[0].split(':')[0].replace(/[^0-9]/g, '');
             if (cleanPn && cleanPn.length >= 7 && cleanPn.length <= 15) {
@@ -130,9 +137,26 @@ export async function resolvePhoneAndLid(jidOrPhone, msg = null, sock = null) {
                 const pn = await sock.signalRepository.lidMapping.getPNForLID(`${cleanDigits}@lid`);
                 if (pn) {
                     const cleanPn = String(pn).split('@')[0].split(':')[0].replace(/[^0-9]/g, '');
-                    if (cleanPn && cleanPn.length >= 7) {
+                    if (cleanPn && cleanPn.length >= 7 && cleanPn.length <= 15) {
                         linkLidAndPhone(cleanDigits, cleanPn);
                         return { phone: cleanPn, realPhone: cleanPn, lid: cleanDigits, isLid: true };
+                    }
+                }
+            }
+        } catch (_) {}
+
+        // 4. Query onWhatsApp API if available
+        try {
+            if (sock?.onWhatsApp) {
+                const results = await sock.onWhatsApp(`${cleanDigits}@lid`);
+                if (Array.isArray(results) && results.length > 0 && results[0]?.jid) {
+                    const resultJid = String(results[0].jid);
+                    if (resultJid.includes('@s.whatsapp.net')) {
+                        const cleanPn = resultJid.split('@')[0].split(':')[0].replace(/[^0-9]/g, '');
+                        if (cleanPn && cleanPn.length >= 7 && cleanPn.length <= 15) {
+                            linkLidAndPhone(cleanDigits, cleanPn);
+                            return { phone: cleanPn, realPhone: cleanPn, lid: cleanDigits, isLid: true };
+                        }
                     }
                 }
             }

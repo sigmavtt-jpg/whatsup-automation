@@ -10,6 +10,8 @@ import com.whatsup.automation.domain.usecase.ProcessResult
 import com.whatsup.automation.domain.usecase.ActionResult
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Before
@@ -22,6 +24,10 @@ class AntiDuplicationShieldTest {
     private lateinit var fakeLogRepository: FakeLogRepository
     private lateinit var matchRuleUseCase: MatchRuleUseCase
     private lateinit var useCase: ProcessIncomingMessageUseCase
+    private lateinit var fakeContactFormattingRepo: com.whatsup.automation.domain.repository.ContactFormattingRepository
+    private lateinit var fakeNotificationRepo: com.whatsup.automation.domain.repository.NotificationRepository
+    private lateinit var mockEngine: com.whatsup.automation.data.engine.WhatsAppEngine
+    private lateinit var memoryManager: com.whatsup.automation.domain.util.ConversationMemoryManager
 
     @Before
     fun setup() {
@@ -29,11 +35,30 @@ class AntiDuplicationShieldTest {
         fakeRuleRepository = FakeRuleRepository()
         fakeLogRepository = FakeLogRepository()
         matchRuleUseCase = MatchRuleUseCase(fakeRuleRepository)
+        fakeContactFormattingRepo = object : com.whatsup.automation.domain.repository.ContactFormattingRepository {
+            override fun getSettings(): Flow<ContactFormattingSettings> = flowOf(ContactFormattingSettings())
+            override suspend fun updateSettings(settings: ContactFormattingSettings) {}
+        }
+        fakeNotificationRepo = object : com.whatsup.automation.domain.repository.NotificationRepository {
+            override val notifications: StateFlow<List<AppNotification>> = MutableStateFlow(emptyList())
+            override val unreadCount: StateFlow<Int> = MutableStateFlow(0)
+            override suspend fun postNotification(title: String, message: String, type: NotificationType) {}
+            override suspend fun markAllAsRead() {}
+            override suspend fun clearAll() {}
+        }
+        mockEngine = org.mockito.kotlin.mock()
+        org.mockito.kotlin.whenever(mockEngine.isAutomationPaused).thenReturn(kotlinx.coroutines.flow.MutableStateFlow(false))
+        memoryManager = com.whatsup.automation.domain.util.ConversationMemoryManager()
+
         useCase = ProcessIncomingMessageUseCase(
             ruleRepository = fakeRuleRepository,
             matchRuleUseCase = matchRuleUseCase,
             logRepository = fakeLogRepository,
-            deviceContactsManager = fakeDeviceContactsManager
+            deviceContactsManager = fakeDeviceContactsManager,
+            contactFormattingRepository = fakeContactFormattingRepo,
+            whatsAppEngine = mockEngine,
+            notificationRepository = fakeNotificationRepo,
+            conversationMemoryManager = memoryManager
         )
     }
 
@@ -77,10 +102,10 @@ class AntiDuplicationShieldTest {
 
         val result = useCase.execute(message)
 
-        assertTrue(result is ProcessResult.Executed)
-        val executed = result as ProcessResult.Executed
-        assertEquals("درع منع التكرار", executed.ruleName)
-        assertEquals("أنت مسجل لدينا بالفعل باسم أحمد علي ✅", (executed.actions.first() as ActionResult.ReplySent).message)
+        assertTrue(result is ProcessResult.Ignored)
+        val ignored = result as ProcessResult.Ignored
+        assertTrue(ignored.reason.contains("مسجلة مسبقاً") || ignored.reason.contains("تجاهل صامت"))
+        assertEquals("أحمد علي", fakeDeviceContactsManager.getContactDisplayName("+967771234567"))
     }
 
     @Test
@@ -88,7 +113,7 @@ class AntiDuplicationShieldTest {
         // شخص مسجل مسبقاً باسم أحمد
         fakeDeviceContactsManager.savedContacts["+967771234567"] = "أحمد"
 
-        // يرسل طلباً جديداً لتغيير اسمه إلى محمد
+        // يرسل طلباً جديداً لتغيير اسمه إلى محمد -> تجاهل صامت وعدم تعديل الاسم
         val message = IncomingMessage(
             id = "msg3",
             senderPhone = "+967771234567",
@@ -97,12 +122,11 @@ class AntiDuplicationShieldTest {
 
         val result = useCase.execute(message)
 
-        assertTrue(result is ProcessResult.Executed)
-        val executed = result as ProcessResult.Executed
-        assertEquals("درع منع التكرار والتحديث الذكي", executed.ruleName)
-        assertEquals("تم تحديث اسمك إلى محمد اليافعي بنجاح ✅", (executed.actions.first() as ActionResult.ReplySent).message)
-        // تم تحديث الاسم في السجل الفعلي دون إنشاء جهة مكررة
-        assertEquals("محمد اليافعي", fakeDeviceContactsManager.getContactDisplayName("+967771234567"))
+        assertTrue(result is ProcessResult.Ignored)
+        val ignored = result as ProcessResult.Ignored
+        assertTrue(ignored.reason.contains("مسجلة مسبقاً") || ignored.reason.contains("تجاهل صامت"))
+        // تم الاحتفاظ بالاسم الأصلي في السجل الفعلي دون أي تعديل
+        assertEquals("أحمد", fakeDeviceContactsManager.getContactDisplayName("+967771234567"))
     }
 
     @Test
@@ -183,6 +207,164 @@ class AntiDuplicationShieldTest {
             assertEquals(pair.second, fakeDeviceContactsManager.getContactDisplayName(phone))
         }
     }
+
+    @Test
+    fun testRealWorldScenariosFromDeviceLogs() = runBlocking {
+        // 1. قضية راكان: مسجل مسبقاً باسم راكان ويرسل سوالف عامة
+        val rakanPhone = "+967770001122"
+        fakeDeviceContactsManager.savedContacts[rakanPhone] = "راكان"
+
+        val chatMessage = IncomingMessage(
+            id = "rakan_msg_1",
+            senderPhone = rakanPhone,
+            text = "شروف واللي يدخلو بارقام غريبه ويسكتو مايقولو اسمهم"
+        )
+        val chatResult = useCase.execute(chatMessage)
+        // لا يتم تعديل اسمه نهائياً ولا يتم حفظ جملة السوالف كاسم!
+        assertEquals("راكان", fakeDeviceContactsManager.getContactDisplayName(rakanPhone))
+        assertFalse("يجب ألا يتم تعديل الاسم", chatResult is ProcessResult.Executed && chatResult.ruleName.contains("تحديث"))
+
+        // راكان يرسل تصحيحاً مع تطويل حروف "اقصدددد"
+        val correctionMessage = IncomingMessage(
+            id = "rakan_msg_2",
+            senderPhone = rakanPhone,
+            text = "مله سجلني قلت لك راكان اقصدددد"
+        )
+        val correctionResult = useCase.execute(correctionMessage)
+        // يتم الاحتفاظ باسم راكان النظيف
+        assertEquals("راكان", fakeDeviceContactsManager.getContactDisplayName(rakanPhone))
+
+        // 2. قضية درع الكتم الصريح: "ممنوع ترد عليا"
+        val silenceMessage = IncomingMessage(
+            id = "silence_msg_1",
+            senderPhone = "+967779998877",
+            text = "صليت باروح اكمل اللي عليا بارد عليك وبس ممنوع ترد عليا"
+        )
+        val silenceResult = useCase.execute(silenceMessage)
+        assertTrue(silenceResult is ProcessResult.Ignored)
+        assertEquals("أمر كتم صريح من المستخدم", (silenceResult as ProcessResult.Ignored).reason)
+
+        // 3. قضية "ما اسمع الرسائل"
+        val hearingMessage = IncomingMessage(
+            id = "hear_msg_1",
+            senderPhone = "+967775554433",
+            text = "ما اسمع الرسائل"
+        )
+        val hearingResult = useCase.execute(hearingMessage)
+        assertNull(fakeDeviceContactsManager.getContactDisplayName("+967775554433"))
+        assertFalse(hearingResult is ProcessResult.Executed)
+
+        // 4. قضية "لا مش تبعنا"
+        val notOursMessage = IncomingMessage(
+            id = "not_ours_msg_1",
+            senderPhone = "+967772221100",
+            text = "لا مش تبعنا"
+        )
+        val notOursResult = useCase.execute(notOursMessage)
+        assertNull(fakeDeviceContactsManager.getContactDisplayName("+967772221100"))
+        assertFalse(notOursResult is ProcessResult.Executed)
+    }
+
+    @Test
+    fun testDirectAndPastNegationPatterns() = runBlocking {
+        val negationTexts = listOf(
+            "لا تسجلني",
+            "لا تسجلني يا اخي",
+            "ممنوع تسجلني",
+            "بلاش تسجلني",
+            "انا ما قلت سجلني",
+            "ما قلت لك سجلني",
+            "قلت له لا تسجلني",
+            "من قال لك تسجلني؟",
+            "ليش تسجلني؟"
+        )
+
+        for ((idx, txt) in negationTexts.withIndex()) {
+            val phone = "+96777880011$idx"
+            val msg = IncomingMessage(id = "neg_$idx", senderPhone = phone, text = txt)
+            val result = useCase.execute(msg)
+            assertTrue("Text '$txt' should be ignored or not executed as registration", result is ProcessResult.Ignored || result is ProcessResult.NoMatch)
+            assertNull("Phone $phone should not be saved", fakeDeviceContactsManager.getContactDisplayName(phone))
+        }
+    }
+
+    @Test
+    fun testQuotedSpeechAndNarrativeContext() = runBlocking {
+        val quotedTexts = listOf(
+            "فلان قال لي سجلني علي",
+            "وقلت له سجلني علي",
+            "واحد كتب لي سجلني",
+            "كان يقول لي سجلني باسم عمر"
+        )
+
+        for ((idx, txt) in quotedTexts.withIndex()) {
+            val phone = "+96777990022$idx"
+            val msg = IncomingMessage(id = "quote_$idx", senderPhone = phone, text = txt)
+            val result = useCase.execute(msg)
+            assertTrue("Text '$txt' should be ignored", result is ProcessResult.Ignored || result is ProcessResult.NoMatch)
+            assertNull("Phone $phone should not be saved", fakeDeviceContactsManager.getContactDisplayName(phone))
+        }
+    }
+
+    @Test
+    fun testEmojiAndDecorationPreservation() = runBlocking {
+        val phone = "+967771239999"
+        val msg = IncomingMessage(
+            id = "emoji_msg",
+            senderPhone = phone,
+            text = "سجلني علي صالح 😂🔥"
+        )
+        val result = useCase.execute(msg)
+        assertTrue(result is ProcessResult.Executed)
+        val saved = fakeDeviceContactsManager.getContactDisplayName(phone)
+        assertNotNull(saved)
+        assertTrue(saved!!.contains("علي صالح"))
+    }
+
+    @Test
+    fun testStrictAlreadyRegisteredBarrier() = runBlocking {
+        val phone = "+967770123456"
+
+        // 1. غير مسجل + "سجلني محمد" -> Executed والاسم يصبح "محمد"
+        val msg1 = IncomingMessage(id = "barrier_1", senderPhone = phone, text = "سجلني محمد")
+        val result1 = useCase.execute(msg1)
+        assertTrue("غير مسجل يجب أن يتم حفظه", result1 is ProcessResult.Executed)
+        assertEquals("محمد", fakeDeviceContactsManager.getContactDisplayName(phone))
+
+        // ضبط الاسم يدوياً إلى "أحمد" لاختبار باقي السيناريوهات الإلزامية
+        fakeDeviceContactsManager.savedContacts[phone] = "أحمد"
+        val initialContactsCount = fakeDeviceContactsManager.savedContacts.size
+
+        // 2. مسجل "أحمد" + "سجلني أحمد" -> No-Op والاسم يبقى "أحمد"
+        val msg2 = IncomingMessage(id = "barrier_2", senderPhone = phone, text = "سجلني أحمد")
+        val result2 = useCase.execute(msg2)
+        assertTrue("مسجل بنفس الاسم يجب أن يتجاهل صامتاً", result2 is ProcessResult.Ignored)
+        assertEquals("أحمد", fakeDeviceContactsManager.getContactDisplayName(phone))
+        assertEquals(initialContactsCount, fakeDeviceContactsManager.savedContacts.size)
+
+        // 3. مسجل "أحمد" + "سجلني محمد" -> No-Op والاسم يبقى "أحمد"
+        val msg3 = IncomingMessage(id = "barrier_3", senderPhone = phone, text = "سجلني محمد")
+        val result3 = useCase.execute(msg3)
+        assertTrue("مسجل مسبقاً ويرسل اسماً جديداً يجب أن يتجاهل صامتاً", result3 is ProcessResult.Ignored)
+        assertEquals("أحمد", fakeDeviceContactsManager.getContactDisplayName(phone))
+        assertEquals(initialContactsCount, fakeDeviceContactsManager.savedContacts.size)
+
+        // 4. مسجل "أحمد" + "احفظني علي" -> No-Op والاسم يبقى "أحمد"
+        val msg4 = IncomingMessage(id = "barrier_4", senderPhone = phone, text = "احفظني علي")
+        val result4 = useCase.execute(msg4)
+        assertTrue("مسجل مسبقاً ويرسل احفظني علي يجب أن يتجاهل صامتاً", result4 is ProcessResult.Ignored)
+        assertEquals("أحمد", fakeDeviceContactsManager.getContactDisplayName(phone))
+        assertEquals(initialContactsCount, fakeDeviceContactsManager.savedContacts.size)
+
+        // 5. تكرار الرسالة عدة مرات -> لا توجد أي mutation إضافية والاسم يبقى "أحمد"
+        for (i in 1..5) {
+            val repeatMsg = IncomingMessage(id = "repeat_$i", senderPhone = phone, text = "سجلني محمد اليافعي")
+            val repeatResult = useCase.execute(repeatMsg)
+            assertTrue("التكرار يجب أن يتجاهل دائماً", repeatResult is ProcessResult.Ignored)
+            assertEquals("أحمد", fakeDeviceContactsManager.getContactDisplayName(phone))
+            assertEquals(initialContactsCount, fakeDeviceContactsManager.savedContacts.size)
+        }
+    }
 }
 
 class FakeDeviceContactsManager : DeviceContactsManager() {
@@ -232,4 +414,5 @@ class FakeLogRepository : LogRepository {
     }
     override suspend fun clearAllLogs() { logs.clear() }
     override suspend fun getStats(): DashboardStats = DashboardStats()
+    override suspend fun pruneOldLogs(keepCount: Int): Int = 0
 }

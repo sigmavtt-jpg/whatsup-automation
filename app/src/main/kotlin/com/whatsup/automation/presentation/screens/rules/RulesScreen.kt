@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -33,8 +34,11 @@ import androidx.compose.ui.window.DialogProperties
 import com.whatsup.automation.domain.model.PatternType
 import com.whatsup.automation.domain.model.Rule
 import com.whatsup.automation.domain.model.RuleAction
+import com.whatsup.automation.presentation.components.BentoCard
 import com.whatsup.automation.presentation.components.GlassmorphicCard
 import com.whatsup.automation.presentation.components.GradientButton
+import com.whatsup.automation.presentation.components.LiquidGradientButton
+import com.whatsup.automation.presentation.components.SegmentedPillSelector
 import com.whatsup.automation.presentation.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -85,13 +89,13 @@ fun RulesScreen(
                 showAddDialog = false
                 ruleToEdit = null
             },
-            onSave = { name, desc, patternType, patternVal, reply, isSaveContact, priority ->
+            onSave = { name, patternVal, reply, priority ->
                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                 val target = ruleToEdit
                 if (target != null) {
-                    viewModel.editRule(target.id, name, desc, patternType, patternVal, reply, isSaveContact, priority)
+                    viewModel.editRule(target.id, name, "", PatternType.CONTAINS, patternVal, reply, false, priority)
                 } else {
-                    viewModel.addRule(name, desc, patternType, patternVal, reply, isSaveContact, priority)
+                    viewModel.addRule(name, "", PatternType.CONTAINS, patternVal, reply, false, priority)
                 }
                 showAddDialog = false
                 ruleToEdit = null
@@ -178,18 +182,15 @@ fun RulesScreen(
                 }
             }
 
-            // 2. بطاقة تخصيص وتوسيم أسماء جهات الاتصال (بدون إيموجي إجباري)
+            // 2. القاعدة الثابتة الأولى: تسجيل وحفظ جهات الاتصال في دفتر الهاتف
             item {
                 val fmt = uiState.formattingSettings
 
-                GlassmorphicCard(
+                BentoCard(
                     modifier = Modifier.fillMaxWidth(),
-                    cornerRadius = 18.dp,
-                    borderBrush = Brush.linearGradient(
-                        listOf(NeonPurple.copy(alpha = 0.5f), CyberCyan.copy(alpha = 0.3f))
-                    )
+                    borderBrush = ObsidianGlowBorder.Purple
                 ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -197,23 +198,44 @@ fun RulesScreen(
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                Icon(
-                                    Icons.Filled.Badge,
-                                    contentDescription = null,
-                                    tint = NeonPurple,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                                Column {
-                                    Text(
-                                        text = "تنسيق حفظ جهات الاتصال في الهاتف",
-                                        fontSize = 15.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = TextPrimary
+                                Box(
+                                    modifier = Modifier
+                                        .size(38.dp)
+                                        .clip(CircleShape)
+                                        .background(NeonPurple.copy(alpha = 0.15f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        Icons.Filled.Badge,
+                                        contentDescription = null,
+                                        tint = NeonPurple,
+                                        modifier = Modifier.size(20.dp)
                                     )
+                                }
+                                Column {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Text(
+                                            text = "قاعدة تسجيل جهات الاتصال",
+                                            fontSize = 16.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = TextPrimary
+                                        )
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(NeonPurple.copy(alpha = 0.15f))
+                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        ) {
+                                            Text("ثابتة 📌", color = NeonPurple, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
                                     Text(
-                                        text = "إضافة وسم نصي اختياري لأسماء العملاء في دفتر الهاتف",
+                                        text = "التقاط اسم العميل وحفظه في دفتر الهاتف والرد عليه فوراً",
                                         fontSize = 11.sp,
                                         color = TextSecondary
                                     )
@@ -238,6 +260,7 @@ fun RulesScreen(
                         if (fmt.isEnabled) {
                             HorizontalDivider(color = Color(0x15FFFFFF))
 
+                            // حقول تخصيص الاسم: قبل الاسم وبعد الاسم
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -245,7 +268,7 @@ fun RulesScreen(
                                 OutlinedTextField(
                                     value = fmt.customPrefix,
                                     onValueChange = { viewModel.updateFormattingSettings(fmt.copy(customPrefix = it)) },
-                                    label = { Text("بادئة نصية (اختياري)") },
+                                    label = { Text("قبل الاسم (بادئة/رمز)") },
                                     placeholder = { Text("مثال: عميل / ") },
                                     modifier = Modifier.weight(1f),
                                     singleLine = true,
@@ -261,7 +284,7 @@ fun RulesScreen(
                                 OutlinedTextField(
                                     value = fmt.customTag,
                                     onValueChange = { viewModel.updateFormattingSettings(fmt.copy(customTag = it)) },
-                                    label = { Text("وسم لاحق (اختياري)") },
+                                    label = { Text("بعد الاسم (وسم/رمز)") },
                                     placeholder = { Text("مثال: [واتساب]") },
                                     modifier = Modifier.weight(1f),
                                     singleLine = true,
@@ -279,9 +302,10 @@ fun RulesScreen(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(10.dp))
+                                    .clip(RoundedCornerShape(12.dp))
                                     .background(Color(0x15FFFFFF))
-                                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                                    .border(1.dp, Color(0x18FFFFFF), RoundedCornerShape(12.dp))
+                                    .padding(horizontal = 14.dp, vertical = 10.dp)
                             ) {
                                 val previewName = fmt.formatForPhonebook("(الاسم)")
                                 Text(
@@ -291,7 +315,149 @@ fun RulesScreen(
                                     color = TextSecondary
                                 )
                             }
+
+                            // حقل الكلمات المفتاحية للتسجيل
+                            OutlinedTextField(
+                                value = fmt.triggerKeywords,
+                                onValueChange = { viewModel.updateFormattingSettings(fmt.copy(triggerKeywords = it)) },
+                                label = { Text("الكلمات المفتاحية للتسجيل والحفظ *") },
+                                placeholder = { Text("سجلني، احفظني، سجل اسمي، احفظ رقمي، اسمي") },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                                shape = RoundedCornerShape(12.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = WhatsAppGreen,
+                                    unfocusedBorderColor = Color(0x22FFFFFF),
+                                    focusedTextColor = TextPrimary,
+                                    unfocusedTextColor = TextPrimary
+                                )
+                            )
+
+                            // حقل نص الرد التلقائي عند الحفظ
+                            OutlinedTextField(
+                                value = fmt.replyMessage,
+                                onValueChange = { viewModel.updateFormattingSettings(fmt.copy(replyMessage = it)) },
+                                label = { Text("نص الرد التلقائي عند اكتمال الحفظ * (يدعم Spintax)") },
+                                placeholder = { Text("تم حفظك باسم {name} بنجاح ✅") },
+                                modifier = Modifier.fillMaxWidth(),
+                                minLines = 2,
+                                maxLines = 4,
+                                shape = RoundedCornerShape(12.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = CyberCyan,
+                                    unfocusedBorderColor = Color(0x22FFFFFF),
+                                    focusedTextColor = TextPrimary,
+                                    unfocusedTextColor = TextPrimary
+                                )
+                            )
+
+                            // شريط إدراج متغيرات الرد
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                val replyVars = listOf(
+                                    "{name}" to "الاسم كامل",
+                                    "{first_name}" to "الاسم الأول",
+                                    "{time_greeting}" to "التحية بالوقت",
+                                    "{{أهلاً|مرحباً|حياك الله}}" to "Spintax ترحيب",
+                                    "{{تم حفظك|سجلتك عندي}}" to "Spintax تأكيد"
+                                )
+                                replyVars.forEach { (tag, label) ->
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(Color(0x1800E5FF))
+                                            .clickable {
+                                                viewModel.updateFormattingSettings(fmt.copy(replyMessage = fmt.replyMessage + " $tag"))
+                                            }
+                                            .padding(horizontal = 6.dp, vertical = 3.dp)
+                                    ) {
+                                        Text(
+                                            text = "+ $label",
+                                            color = CyberCyan,
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                }
+                            }
+
+                            // معاينة عينة من رد التأكيد المولد
+                            if (fmt.replyMessage.isNotBlank()) {
+                                val previewReply = remember(fmt.replyMessage) {
+                                    com.whatsup.automation.domain.util.SpintaxEngine.process(
+                                        template = fmt.replyMessage,
+                                        recipientName = "محمد أحمد",
+                                        recipientPhone = "+967770000000"
+                                    )
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Color(0x1025D366))
+                                        .padding(8.dp)
+                                ) {
+                                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        Text(
+                                            text = "🎲 عينة حية لرسالة التأكيد التي ستصل للشخص:",
+                                            fontSize = 10.sp,
+                                            color = WhatsAppGreen,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = previewReply,
+                                            fontSize = 11.sp,
+                                            color = TextSecondary,
+                                            maxLines = 2
+                                        )
+                                    }
+                                }
+                            }
                         }
+                    }
+                }
+            }
+
+            // فاصل وعنوان قسم الردود التلقائية
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "الردود التلقائية المخصصة",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                        Text(
+                            text = "قواعد الرد على الكلمات والرسائل الخاصة",
+                            fontSize = 11.sp,
+                            color = TextSecondary
+                        )
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            ruleToEdit = null
+                            showAddDialog = true
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = WhatsAppGreen),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("إضافة رد", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -299,13 +465,13 @@ fun RulesScreen(
             // 3. قائمة القواعد المسجلة
             if (uiState.rules.isEmpty()) {
                 item {
-                    GlassmorphicCard(modifier = Modifier.fillMaxWidth()) {
+                    BentoCard(modifier = Modifier.fillMaxWidth()) {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(24.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             Icon(
                                 Icons.AutoMirrored.Filled.List,
@@ -324,7 +490,7 @@ fun RulesScreen(
                                 fontSize = 12.sp,
                                 color = TextSecondary
                             )
-                            GradientButton(
+                            LiquidGradientButton(
                                 text = "إضافة قاعدة جديدة الآن",
                                 onClick = {
                                     ruleToEdit = null
@@ -365,14 +531,12 @@ fun RuleCard(
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
-    val isSaveContactRule = rule.actions.any { it is RuleAction.SaveContactAndReply }
-
-    GlassmorphicCard(
+    BentoCard(
         modifier = Modifier.fillMaxWidth(),
-        cornerRadius = 16.dp
+        borderBrush = if (rule.isEnabled) ObsidianGlowBorder.Emerald else ObsidianGlowBorder.None
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            // رأس البطاقة (الاسم، شارة النوع، التبديل)
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            // رأس البطاقة (الاسم، الأولوية، التبديل)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -380,45 +544,29 @@ fun RuleCard(
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.weight(1f, fill = false)
                 ) {
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
                             .background(if (rule.isEnabled) WhatsAppGreen.copy(alpha = 0.2f) else DarkBgSecondary)
-                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
                     ) {
                         Text(
                             text = "#${rule.priority}",
                             color = if (rule.isEnabled) WhatsAppGreen else TextMuted,
-                            fontSize = 11.sp,
+                            fontSize = 13.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }
 
                     Text(
                         text = rule.name,
-                        fontSize = 16.sp,
+                        fontSize = 17.sp,
                         fontWeight = FontWeight.Bold,
                         color = if (rule.isEnabled) TextPrimary else TextMuted
                     )
-
-                    // شارة نوع الإجراء (حفظ جهة اتصال vs رد تلقائي)
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(
-                                if (isSaveContactRule) Color(0x3306B6D4) else Color(0x2225D366)
-                            )
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = if (isSaveContactRule) "👤 حفظ جهة اتصال + رد" else "💬 رد فقط",
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isSaveContactRule) CyberCyan else WhatsAppGreen
-                        )
-                    }
                 }
 
                 Switch(
@@ -433,33 +581,20 @@ fun RuleCard(
                 )
             }
 
-            if (rule.description.isNotBlank()) {
-                Text(
-                    text = rule.description,
-                    fontSize = 12.sp,
-                    color = TextSecondary
-                )
-            }
-
-            // شرط المطابقة
+            // الكلمات المفتاحية
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
-                    text = when (rule.patternType) {
-                        PatternType.CONTAINS -> "يحتوي على:"
-                        PatternType.STARTS_WITH -> "يبدأ بـ:"
-                        PatternType.EXACT_MATCH -> "يطابق تماماً:"
-                        PatternType.REGEX -> "تعبير نمطي:"
-                    },
-                    fontSize = 11.sp,
+                    text = "الكلمات المفتاحية:",
+                    fontSize = 13.sp,
                     color = CyberCyan,
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.Bold
                 )
                 Text(
                     text = rule.patternValue,
-                    fontSize = 12.sp,
+                    fontSize = 14.sp,
                     color = TextPrimary,
                     fontWeight = FontWeight.SemiBold
                 )
@@ -477,25 +612,26 @@ fun RuleCard(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
+                        .clip(RoundedCornerShape(12.dp))
                         .background(Color(0x0DFFFFFF))
-                        .border(1.dp, Color(0x1AFFFFFF), RoundedCornerShape(10.dp))
-                        .padding(10.dp)
+                        .border(1.dp, Color(0x1AFFFFFF), RoundedCornerShape(12.dp))
+                        .padding(12.dp)
                 ) {
                     Row(
                         verticalAlignment = Alignment.Top,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Icon(
                             Icons.AutoMirrored.Filled.Send,
                             contentDescription = null,
-                            tint = if (isSaveContactRule) CyberCyan else WhatsAppGreen,
-                            modifier = Modifier.size(14.dp)
+                            tint = WhatsAppGreen,
+                            modifier = Modifier.size(16.dp)
                         )
                         Text(
                             text = replyText,
-                            fontSize = 12.sp,
-                            color = TextSecondary
+                            fontSize = 13.sp,
+                            color = TextSecondary,
+                            lineHeight = 18.sp
                         )
                     }
                 }
@@ -508,15 +644,17 @@ fun RuleCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 TextButton(onClick = onEdit) {
-                    Icon(Icons.Filled.Edit, contentDescription = "تعديل", tint = CyberCyan, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Filled.Edit, contentDescription = "تعديل", tint = CyberCyan, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("تعديل", fontSize = 12.sp, color = CyberCyan)
+                    Text("تعديل", fontSize = 13.sp, color = CyberCyan, fontWeight = FontWeight.Bold)
                 }
 
+                Spacer(modifier = Modifier.width(8.dp))
+
                 TextButton(onClick = onDelete) {
-                    Icon(Icons.Filled.Delete, contentDescription = "حذف", tint = CoralError, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Filled.Delete, contentDescription = "حذف", tint = CoralError, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("حذف", fontSize = 12.sp, color = CoralError)
+                    Text("حذف", fontSize = 13.sp, color = CoralError, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -529,24 +667,14 @@ fun RuleFormDialog(
     onDismiss: () -> Unit,
     onSave: (
         name: String,
-        description: String,
-        patternType: PatternType,
         patternValue: String,
         replyMessage: String,
-        isSaveContact: Boolean,
         priority: Int
     ) -> Unit
 ) {
     var name by remember { mutableStateOf(initialRule?.name ?: "") }
-    var description by remember { mutableStateOf(initialRule?.description ?: "") }
-    var patternType by remember { mutableStateOf(initialRule?.patternType ?: PatternType.CONTAINS) }
     var patternValue by remember { mutableStateOf(initialRule?.patternValue ?: "") }
     var priorityText by remember { mutableStateOf((initialRule?.priority ?: 1).toString()) }
-
-    val initialIsSaveContact = remember(initialRule) {
-        initialRule?.actions?.any { it is RuleAction.SaveContactAndReply } ?: false
-    }
-    var isSaveContact by remember { mutableStateOf(initialIsSaveContact) }
 
     val initialReply = remember(initialRule) {
         initialRule?.actions?.firstNotNullOfOrNull {
@@ -565,95 +693,35 @@ fun RuleFormDialog(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.6f))
+                .background(Color.Black.copy(alpha = 0.75f))
                 .padding(20.dp),
             contentAlignment = Alignment.Center
         ) {
-            GlassmorphicCard(
+            BentoCard(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 620.dp),
-                cornerRadius = 24.dp
+                    .wrapContentHeight(),
+                borderBrush = ObsidianGlowBorder.Emerald
             ) {
                 Column(
-                    modifier = Modifier
-                        .verticalScroll(rememberScrollState())
-                        .padding(vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     Text(
-                        text = if (initialRule == null) "إضافة قاعدة جديدة" else "تعديل القاعدة",
-                        fontSize = 18.sp,
+                        text = if (initialRule == null) "إضافة قاعدة رد تلقائي" else "تعديل قاعدة الرد",
+                        fontSize = 19.sp,
                         fontWeight = FontWeight.Bold,
                         color = TextPrimary
                     )
-
-                    // محدد نوع القاعدة (رد تلقائي vs حفظ جهة اتصال + رد)
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(DarkBgPrimary)
-                            .padding(4.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(if (!isSaveContact) Color(0x3325D366) else Color.Transparent)
-                                .clickable { isSaveContact = false }
-                                .padding(vertical = 10.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "💬 رد تلقائي فقط",
-                                fontSize = 12.sp,
-                                fontWeight = if (!isSaveContact) FontWeight.Bold else FontWeight.Normal,
-                                color = if (!isSaveContact) WhatsAppGreen else TextMuted
-                            )
-                        }
-
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(if (isSaveContact) Color(0x3306B6D4) else Color.Transparent)
-                                .clickable { isSaveContact = true }
-                                .padding(vertical = 10.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "👤 حفظ جهة اتصال + رد",
-                                fontSize = 12.sp,
-                                fontWeight = if (isSaveContact) FontWeight.Bold else FontWeight.Normal,
-                                color = if (isSaveContact) CyberCyan else TextMuted
-                            )
-                        }
-                    }
-
-                    if (isSaveContact) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(Color(0x1A06B6D4))
-                                .padding(10.dp)
-                        ) {
-                            Text(
-                                text = "ℹ️ عند تطابق هذه القاعدة، سيتم استخراج اسم الشخص من الرسالة وحفظه مباشرة في دفتر الهاتف بدون أي إيموجي مميز، ثم إرسال الرد.",
-                                fontSize = 11.sp,
-                                color = CyberCyan
-                            )
-                        }
-                    }
 
                     OutlinedTextField(
                         value = name,
                         onValueChange = { name = it },
                         label = { Text("اسم القاعدة *") },
-                        placeholder = { Text(if (isSaveContact) "مثال: تسجيل العملاء الجدد" else "مثال: الرد على التحية") },
+                        placeholder = { Text("مثال: الرد على التحية") },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = WhatsAppGreen,
                             unfocusedBorderColor = Color(0x26FFFFFF),
@@ -661,61 +729,17 @@ fun RuleFormDialog(
                             unfocusedTextColor = TextPrimary
                         )
                     )
-
-                    OutlinedTextField(
-                        value = description,
-                        onValueChange = { description = it },
-                        label = { Text("الوصف (اختياري)") },
-                        modifier = Modifier.fillMaxWidth(),
-                        maxLines = 2,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = CyberCyan,
-                            unfocusedBorderColor = Color(0x26FFFFFF),
-                            focusedTextColor = TextPrimary,
-                            unfocusedTextColor = TextPrimary
-                        )
-                    )
-
-                    // نوع المطابقة
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        listOf(
-                            PatternType.CONTAINS to "يحتوي",
-                            PatternType.STARTS_WITH to "يبدأ بـ",
-                            PatternType.EXACT_MATCH to "مطابقة تامة",
-                            PatternType.REGEX to "نمط Regex"
-                        ).forEach { (type, label) ->
-                            val isSelected = patternType == type
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(if (isSelected) Color(0x3325D366) else DarkBgPrimary)
-                                    .border(1.dp, if (isSelected) WhatsAppGreen else Color.Transparent, RoundedCornerShape(8.dp))
-                                    .clickable { patternType = type }
-                                    .padding(vertical = 8.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = label,
-                                    fontSize = 11.sp,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (isSelected) WhatsAppGreen else TextMuted
-                                )
-                            }
-                        }
-                    }
 
                     OutlinedTextField(
                         value = patternValue,
                         onValueChange = { patternValue = it },
-                        label = { Text("الكلمات المفتاحية / النمط *") },
-                        placeholder = { Text(if (isSaveContact) "سجلني، احفظ رقمي، اسمي" else "سلام، مرحبا، هلا") },
+                        label = { Text("الكلمات المفتاحية المطلوبة *") },
+                        placeholder = { Text("مثال: سلام، مرحبا، هلا") },
                         modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = WhatsAppGreen,
+                            focusedBorderColor = CyberCyan,
                             unfocusedBorderColor = Color(0x26FFFFFF),
                             focusedTextColor = TextPrimary,
                             unfocusedTextColor = TextPrimary
@@ -726,10 +750,11 @@ fun RuleFormDialog(
                         value = replyMessage,
                         onValueChange = { replyMessage = it },
                         label = { Text("نص الرد التلقائي *") },
-                        placeholder = { Text(if (isSaveContact) "تم حفظك باسم {name} بنجاح ✅" else "وعليكم السلام ورحمة الله...") },
+                        placeholder = { Text("وعليكم السلام ورحمة الله وبركاته...") },
                         modifier = Modifier.fillMaxWidth(),
                         minLines = 3,
                         maxLines = 6,
+                        shape = RoundedCornerShape(12.dp),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = WhatsAppGreen,
                             unfocusedBorderColor = Color(0x26FFFFFF),
@@ -741,9 +766,10 @@ fun RuleFormDialog(
                     OutlinedTextField(
                         value = priorityText,
                         onValueChange = { priorityText = it },
-                        label = { Text("الأولوية (رقم 1 هو الأعلى)") },
+                        label = { Text("ترتيب الأولوية") },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = CyberCyan,
                             unfocusedBorderColor = Color(0x26FFFFFF),
@@ -753,21 +779,23 @@ fun RuleFormDialog(
                     )
 
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 6.dp),
                         horizontalArrangement = Arrangement.End,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         TextButton(onClick = onDismiss) {
-                            Text("إلغاء", color = TextMuted)
+                            Text("إلغاء", color = TextMuted, fontSize = 14.sp)
                         }
 
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
 
-                        GradientButton(
+                        LiquidGradientButton(
                             text = if (initialRule == null) "حفظ القاعدة" else "تحديث القاعدة",
                             onClick = {
                                 val prio = priorityText.toIntOrNull() ?: 1
-                                onSave(name, description, patternType, patternValue, replyMessage, isSaveContact, prio)
+                                onSave(name, patternValue, replyMessage, prio)
                             },
                             enabled = name.isNotBlank() && patternValue.isNotBlank(),
                             icon = Icons.Filled.Check

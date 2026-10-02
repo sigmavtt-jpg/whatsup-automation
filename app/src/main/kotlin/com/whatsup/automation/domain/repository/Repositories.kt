@@ -25,6 +25,7 @@ interface LogRepository {
     suspend fun insertLog(log: ActivityLog): Long
     suspend fun clearAllLogs()
     suspend fun getStats(): DashboardStats
+    suspend fun pruneOldLogs(keepCount: Int = 1000): Int
 }
 
 /**
@@ -63,6 +64,10 @@ interface GroupRepository {
     fun getInsiteLogsForGroup(groupId: Long): Flow<List<GroupMessageLog>>
     fun getCompletedLogsForGroup(groupId: Long): Flow<List<GroupMessageLog>>
     suspend fun sendBroadcastMessageToGroup(groupId: Long, messageText: String, onProgress: ((sent: Int, total: Int) -> Unit)? = null)
+    fun isBroadcastPaused(groupId: Long): Flow<Boolean>
+    fun pauseBroadcast(groupId: Long)
+    fun resumeBroadcast(groupId: Long)
+    fun cancelBroadcast(groupId: Long)
 }
 
 /**
@@ -73,5 +78,10 @@ interface ContactFormattingRepository {
     suspend fun updateSettings(settings: ContactFormattingSettings)
 }
 
-
-
+/**
+ * واجهة مستودع درع الحماية ومحاكي السلوك البشري لمنع الحظر.
+ */
+interface AntiBanRepository {
+    fun getSettings(): Flow<AntiBanSettings>
+    suspend fun updateSettings(settings: AntiBanSettings)
+}

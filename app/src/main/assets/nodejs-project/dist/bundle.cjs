@@ -170582,7 +170582,7 @@ async function resolvePhoneAndLid(jidOrPhone, msg = null, sock2 = null) {
   const cleanDigits = rawStr.split("@")[0].split(":")[0].replace(/[^0-9]/g, "");
   const isLid = rawStr.includes("@lid") || isLidJidOrNumber(rawStr) || isLidJidOrNumber(cleanDigits);
   if (isLid) {
-    const foundPn = msg?.key?.participantPn || msg?.key?.remoteJidPn || msg?.participantPn || msg?.pnJid;
+    const foundPn = msg?.key?.senderPn || msg?.key?.sender_pn || msg?.key?.participantPn || msg?.key?.participant_pn || msg?.key?.remoteJidPn || msg?.participantPn || msg?.senderPn || msg?.pnJid;
     if (foundPn) {
       const cleanPn = String(foundPn).split("@")[0].split(":")[0].replace(/[^0-9]/g, "");
       if (cleanPn && cleanPn.length >= 7 && cleanPn.length <= 15) {
@@ -170599,9 +170599,25 @@ async function resolvePhoneAndLid(jidOrPhone, msg = null, sock2 = null) {
         const pn = await sock2.signalRepository.lidMapping.getPNForLID(`${cleanDigits}@lid`);
         if (pn) {
           const cleanPn = String(pn).split("@")[0].split(":")[0].replace(/[^0-9]/g, "");
-          if (cleanPn && cleanPn.length >= 7) {
+          if (cleanPn && cleanPn.length >= 7 && cleanPn.length <= 15) {
             linkLidAndPhone(cleanDigits, cleanPn);
             return { phone: cleanPn, realPhone: cleanPn, lid: cleanDigits, isLid: true };
+          }
+        }
+      }
+    } catch (_) {
+    }
+    try {
+      if (sock2?.onWhatsApp) {
+        const results = await sock2.onWhatsApp(`${cleanDigits}@lid`);
+        if (Array.isArray(results) && results.length > 0 && results[0]?.jid) {
+          const resultJid = String(results[0].jid);
+          if (resultJid.includes("@s.whatsapp.net")) {
+            const cleanPn = resultJid.split("@")[0].split(":")[0].replace(/[^0-9]/g, "");
+            if (cleanPn && cleanPn.length >= 7 && cleanPn.length <= 15) {
+              linkLidAndPhone(cleanDigits, cleanPn);
+              return { phone: cleanPn, realPhone: cleanPn, lid: cleanDigits, isLid: true };
+            }
           }
         }
       }
@@ -171090,6 +171106,26 @@ function createCommandDispatcher({ getSocket, startSession, getAuthFolder, setAu
           }
           break;
         }
+        case "MARK_READ": {
+          if (sock2 && command.chatJid && command.messageId) {
+            try {
+              const cleanPhone = String(command.chatJid).replace(/[^0-9]/g, "");
+              const rawJid = command.chatJid.includes("@") ? command.chatJid : `${cleanPhone}@s.whatsapp.net`;
+              const jid = jidNormalizedUser(rawJid);
+              const key = {
+                remoteJid: jid,
+                id: command.messageId,
+                fromMe: false
+              };
+              if (command.participant) {
+                key.participant = jidNormalizedUser(command.participant);
+              }
+              await sock2.readMessages([key]);
+            } catch (_) {
+            }
+          }
+          break;
+        }
         case "SEND_MESSAGE": {
           if (sock2 && command.recipient && command.text) {
             const cleanRecipient = String(command.recipient).replace(/[^0-9]/g, "");
@@ -171099,10 +171135,22 @@ function createCommandDispatcher({ getSocket, startSession, getAuthFolder, setAu
             }
             const jid = jidNormalizedUser(rawJid);
             try {
-              await sock2.sendPresenceUpdate("composing", jid);
-              const humanDelay = 1200 + Math.floor(Math.random() * 1500);
-              await new Promise((r) => setTimeout(r, humanDelay));
-              await sock2.sendPresenceUpdate("paused", jid);
+              if (command.markRead && command.messageId) {
+                try {
+                  await sock2.readMessages([{ remoteJid: jid, id: command.messageId, fromMe: false }]);
+                } catch (_) {
+                }
+                const readDelay = command.readDelayMs ? Number(command.readDelayMs) : 0;
+                if (readDelay > 0) {
+                  await new Promise((r) => setTimeout(r, readDelay));
+                }
+              }
+              const typingDuration = command.typingDelayMs ? Number(command.typingDelayMs) : 1200 + Math.floor(Math.random() * 1500);
+              if (typingDuration > 0) {
+                await sock2.sendPresenceUpdate("composing", jid);
+                await new Promise((r) => setTimeout(r, typingDuration));
+                await sock2.sendPresenceUpdate("paused", jid);
+              }
               const msgPayload = { text: command.text };
               const sentResult = await sock2.sendMessage(jid, msgPayload);
               if (sentResult?.key?.id && sentResult?.message) {
@@ -171440,6 +171488,12 @@ async function startWhatsAppSession(authFolder = currentAuthFolder) {
       const isGroup = remoteJid.endsWith("@g.us");
       const actualSender = isGroup ? msg.key.participant || "" : remoteJid;
       if (actualSender.startsWith("120363")) continue;
+      if (msg.key?.senderPn) {
+        linkLidAndPhone(actualSender, msg.key.senderPn, msg.pushName, authFolder);
+      }
+      if (msg.key?.participantPn) {
+        linkLidAndPhone(actualSender, msg.key.participantPn, msg.pushName, authFolder);
+      }
       const resolved = await resolvePhoneAndLid(actualSender, msg, sock);
       const cleanPhone = resolved.realPhone || resolved.phone;
       if (!cleanPhone || cleanPhone.startsWith("120363")) continue;

@@ -18,15 +18,21 @@ import javax.inject.Singleton
 @Singleton
 open class DeviceContactsManager {
     private val context: Context?
+    private var phoneNumberHelper: com.whatsup.automation.domain.util.PhoneNumberHelper? = null
 
     @Inject
-    constructor(@ApplicationContext context: Context) {
+    constructor(
+        @ApplicationContext context: Context,
+        phoneNumberHelper: com.whatsup.automation.domain.util.PhoneNumberHelper
+    ) {
         this.context = context
+        this.phoneNumberHelper = phoneNumberHelper
         initObserver()
     }
 
     constructor() {
         this.context = null
+        this.phoneNumberHelper = null
     }
 
     private val _contactsUpdateTrigger = kotlinx.coroutines.flow.MutableStateFlow(System.currentTimeMillis())
@@ -176,6 +182,11 @@ open class DeviceContactsManager {
      * يدعم الأرقام اليمنية والدولية بكافة حالاتها (مع أو بدون +، أرقام محلية تبدأ بـ 0 أو 7، وتنظيف أحرف التوجيه).
      */
     open fun normalizePhoneNumber(phoneNumber: String): String {
+        val helper = phoneNumberHelper
+        if (helper != null) {
+            val formatted = helper.formatToE164(phoneNumber)
+            if (formatted.isNotBlank()) return formatted
+        }
         val sanitized = phoneNumber.trim().replace("\u200E", "").replace("\u200F", "")
         val cleanDigits = sanitized.replace("[^0-9]".toRegex(), "")
         if (cleanDigits.length < 7) return sanitized
@@ -232,10 +243,12 @@ open class DeviceContactsManager {
      * التحقق مما إذا كان المعرف أو الرقم عبارة عن معرف مشفر (LID) وليس رقم هاتف حقيقي.
      */
     open fun isLid(phoneNumber: String): Boolean {
-        if (phoneNumber.isBlank()) return false
-        if (phoneNumber.contains("lid", ignoreCase = true)) return true
+        if (phoneNumber.isBlank() || phoneNumber.equals("null", ignoreCase = true)) return false
+        if (phoneNumber.contains("lid", ignoreCase = true) || phoneNumber.contains("@lid")) return true
         val cleanDigits = phoneNumber.replace("[^0-9]".toRegex(), "")
-        return cleanDigits == "97517970702387"
+        if (cleanDigits.length > 15) return true
+        if (cleanDigits.length in 14..15 && (cleanDigits.startsWith("123") || cleanDigits.startsWith("975") || cleanDigits == "97517970702387" || cleanDigits == "123317268811856")) return true
+        return cleanDigits == "97517970702387" || cleanDigits == "123317268811856"
     }
 
     /**

@@ -4,6 +4,8 @@ import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -24,14 +26,18 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextDirection
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.whatsup.automation.domain.model.Group
 import com.whatsup.automation.domain.model.GroupLogStatus
 import com.whatsup.automation.domain.model.GroupMember
 import com.whatsup.automation.domain.model.GroupMessageLog
+import com.whatsup.automation.presentation.components.BentoCard
 import com.whatsup.automation.presentation.components.GlassmorphicCard
 import com.whatsup.automation.presentation.components.GradientButton
+import com.whatsup.automation.presentation.components.LiquidGradientButton
+import com.whatsup.automation.presentation.components.SegmentedPillSelector
 import com.whatsup.automation.presentation.theme.*
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -43,6 +49,9 @@ fun GroupsScreen(
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val notifications by viewModel.notifications.collectAsState()
+    val unreadCount by viewModel.unreadNotificationsCount.collectAsState()
+    var showNotificationsSheet by remember { mutableStateOf(false) }
 
     when {
         uiState.isCreateModalOpen -> {
@@ -69,6 +78,9 @@ fun GroupsScreen(
                 onTabSelect = { viewModel.setDetailsTab(it) },
                 onBroadcastTextChange = { viewModel.onBroadcastTextChange(uiState.selectedGroup!!.id, it) },
                 onSendBroadcast = { viewModel.sendBroadcast(uiState.selectedGroup!!.id) },
+                onPauseBroadcast = { viewModel.pauseBroadcast(uiState.selectedGroup!!.id) },
+                onResumeBroadcast = { viewModel.resumeBroadcast(uiState.selectedGroup!!.id) },
+                onCancelBroadcast = { viewModel.cancelBroadcast(uiState.selectedGroup!!.id) },
                 onRemoveMember = { viewModel.removeMemberFromGroup(it) },
                 onOpenAddMember = { viewModel.openAddMemberModal() }
             )
@@ -77,6 +89,11 @@ fun GroupsScreen(
             GroupsListScreen(
                 uiState = uiState,
                 viewModel = viewModel,
+                unreadCount = unreadCount,
+                onOpenNotifications = {
+                    showNotificationsSheet = true
+                    viewModel.markNotificationsAsRead()
+                },
                 modifier = modifier
             )
         }
@@ -94,12 +111,21 @@ fun GroupsScreen(
             onConfirmCustom = { viewModel.addCustomContactToGroup() }
         )
     }
+
+    com.whatsup.automation.presentation.components.NotificationCenterSheet(
+        isOpen = showNotificationsSheet,
+        notifications = notifications,
+        onDismiss = { showNotificationsSheet = false },
+        onClearAll = { viewModel.clearNotifications() }
+    )
 }
 
 @Composable
 fun GroupsListScreen(
     uiState: GroupsUiState,
     viewModel: GroupsViewModel,
+    unreadCount: Int,
+    onOpenNotifications: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val filteredGroups = remember(uiState.groups, uiState.searchQuery) {
@@ -121,7 +147,7 @@ fun GroupsListScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp),
         contentPadding = PaddingValues(top = 24.dp, bottom = 100.dp)
     ) {
-        // شريط العنوان العلوي + زر إنشاء حملة / تقسيم ذكي
+        // شريط العنوان العلوي + زر إنشاء حملة / جرس الإشعارات
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -142,50 +168,34 @@ fun GroupsListScreen(
                     )
                 }
 
-                IconButton(
-                    onClick = { viewModel.openCreateModal() },
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .background(
-                            Brush.horizontalGradient(listOf(WhatsAppGreen, CyberCyan))
-                        )
-                        .size(46.dp)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Filled.Add,
-                        contentDescription = "إنشاء حملة جديدة",
-                        tint = DarkBgPrimary
+                    com.whatsup.automation.presentation.components.NotificationBellButton(
+                        unreadCount = unreadCount,
+                        onClick = onOpenNotifications
                     )
+
+                    IconButton(
+                        onClick = { viewModel.openCreateModal() },
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(
+                                Brush.horizontalGradient(listOf(WhatsAppGreen, CyberCyan))
+                            )
+                            .size(46.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Add,
+                            contentDescription = "إنشاء حملة جديدة",
+                            tint = DarkBgPrimary
+                        )
+                    }
                 }
             }
         }
 
-        // شريط معلومات الحماية ضد الحظر
-        item {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0x1F06B6D4))
-                    .border(1.dp, Color(0x3306B6D4), RoundedCornerShape(12.dp))
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Shield,
-                    contentDescription = null,
-                    tint = CyberCyan,
-                    modifier = Modifier.size(22.dp)
-                )
-                Text(
-                    text = "درع مكافحة الحظر مفعل: فواصل عشوائية (4-9s) مع فترات راحة دورية",
-                    fontSize = 12.sp,
-                    color = CyberCyan,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-        }
 
         // حقل البحث عن مجموعة أو بطاقة
         item {
@@ -209,7 +219,7 @@ fun GroupsListScreen(
         // قائمة بطاقات المجموعات
         if (filteredGroups.isEmpty()) {
             item {
-                GlassmorphicCard(modifier = Modifier.fillMaxWidth()) {
+                BentoCard(modifier = Modifier.fillMaxWidth()) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -234,7 +244,7 @@ fun GroupsListScreen(
                             fontSize = 13.sp,
                             color = TextSecondary
                         )
-                        GradientButton(
+                        LiquidGradientButton(
                             text = "إنشاء حملة أو تقسيم جهات الاتصال الآن",
                             onClick = { viewModel.openCreateModal() },
                             modifier = Modifier.padding(top = 8.dp),
@@ -246,6 +256,7 @@ fun GroupsListScreen(
         } else {
             items(filteredGroups, key = { it.id }) { group ->
                 val isBroadcasting = uiState.isBroadcastingMap[group.id] == true
+                val isPaused = uiState.isPausedMap[group.id] == true
                 val progress = uiState.broadcastingProgress[group.id]
                 val estimatedTime = viewModel.calculateEstimatedTime(group.memberCount)
 
@@ -254,9 +265,13 @@ fun GroupsListScreen(
                     estimatedTime = estimatedTime,
                     broadcastText = uiState.broadcastTexts[group.id] ?: "",
                     isBroadcasting = isBroadcasting,
+                    isPaused = isPaused,
                     progress = progress,
                     onBroadcastTextChange = { viewModel.onBroadcastTextChange(group.id, it) },
                     onSendBroadcast = { viewModel.sendBroadcast(group.id) },
+                    onPause = { viewModel.pauseBroadcast(group.id) },
+                    onResume = { viewModel.resumeBroadcast(group.id) },
+                    onCancel = { viewModel.cancelBroadcast(group.id) },
                     onOpenDetails = { viewModel.selectGroupForDetails(group) },
                     onDeleteGroup = { viewModel.deleteGroup(group.id) }
                 )
@@ -271,17 +286,23 @@ fun GroupCardItem(
     estimatedTime: String,
     broadcastText: String,
     isBroadcasting: Boolean,
+    isPaused: Boolean,
     progress: Pair<Int, Int>?,
     onBroadcastTextChange: (String) -> Unit,
     onSendBroadcast: () -> Unit,
+    onPause: () -> Unit,
+    onResume: () -> Unit,
+    onCancel: () -> Unit,
     onOpenDetails: () -> Unit,
     onDeleteGroup: () -> Unit
 ) {
-    GlassmorphicCard(
+    BentoCard(
         modifier = Modifier.fillMaxWidth(),
-        cornerRadius = 18.dp
+        borderBrush = if (isBroadcasting) {
+            if (isPaused) ObsidianGlowBorder.Amber else ObsidianGlowBorder.Cyan
+        } else ObsidianGlowBorder.Emerald
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             // رأس البطاقة
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -296,7 +317,8 @@ fun GroupCardItem(
                         modifier = Modifier
                             .size(46.dp)
                             .clip(CircleShape)
-                            .background(Color(0x3325D366)),
+                            .background(WhatsAppGreen.copy(alpha = 0.15f))
+                            .border(1.dp, WhatsAppGreen.copy(alpha = 0.3f), CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
@@ -321,7 +343,8 @@ fun GroupCardItem(
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(6.dp))
-                                    .background(Color(0x2625D366))
+                                    .background(WhatsAppGreen.copy(alpha = 0.15f))
+                                    .border(1.dp, WhatsAppGreen.copy(alpha = 0.3f), RoundedCornerShape(6.dp))
                                     .padding(horizontal = 6.dp, vertical = 2.dp)
                             ) {
                                 Text(
@@ -359,7 +382,7 @@ fun GroupCardItem(
                 )
             }
 
-            HorizontalDivider(color = Color(0x1AFFFFFF))
+            HorizontalDivider(color = Color(0x15FFFFFF))
 
             // حقل إدخال الرسالة الممتد ذاتياً (Auto-Expanding Multi-line)
             Text(
@@ -421,12 +444,12 @@ fun GroupCardItem(
                 Surface(
                     shape = RoundedCornerShape(12.dp),
                     color = DarkSurface,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, CyberCyan.copy(alpha = 0.3f)),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, if (isPaused) AmberWarning.copy(alpha = 0.5f) else CyberCyan.copy(alpha = 0.3f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
                         modifier = Modifier.padding(10.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -438,23 +461,23 @@ fun GroupCardItem(
                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 Icon(
-                                    imageVector = Icons.Filled.Shield,
+                                    imageVector = if (isPaused) Icons.Filled.PauseCircle else Icons.Filled.Shield,
                                     contentDescription = null,
-                                    tint = CyberCyan,
-                                    modifier = Modifier.size(14.dp)
+                                    tint = if (isPaused) AmberWarning else CyberCyan,
+                                    modifier = Modifier.size(16.dp)
                                 )
                                 Text(
-                                    text = "درع منع الحظر نشط 🛡️",
+                                    text = if (isPaused) "الحملة متوقفة مؤقتاً ⏸️" else "درع منع الحظر نشط 🛡️",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = CyberCyan
+                                    color = if (isPaused) AmberWarning else CyberCyan
                                 )
                             }
                             Text(
                                 text = "$sent من $total ($percent%)",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = WhatsAppGreenLight
+                                color = if (isPaused) AmberWarning else WhatsAppGreenLight
                             )
                         }
                         
@@ -464,15 +487,55 @@ fun GroupCardItem(
                                 .fillMaxWidth()
                                 .height(8.dp)
                                 .clip(RoundedCornerShape(4.dp)),
-                            color = WhatsAppGreen,
+                            color = if (isPaused) AmberWarning else WhatsAppGreen,
                             trackColor = Color(0x33FFFFFF)
                         )
-                        
-                        Text(
-                            text = "يتم إرسال كل رسالة بفاصل زمني ذكي لحماية رقمك من الحظر نهائياً",
-                            fontSize = 10.sp,
-                            color = TextMuted
-                        )
+
+                        // أزرار التحكم: إيقاف مؤقت / استئناف / إلغاء
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (isPaused) {
+                                Button(
+                                    onClick = onResume,
+                                    colors = ButtonDefaults.buttonColors(containerColor = WhatsAppGreen),
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = DarkBgPrimary, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("استئناف الإرسال", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = DarkBgPrimary)
+                                }
+                            } else {
+                                Button(
+                                    onClick = onPause,
+                                    colors = ButtonDefaults.buttonColors(containerColor = AmberWarning.copy(alpha = 0.2f)),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, AmberWarning),
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(Icons.Filled.Pause, contentDescription = null, tint = AmberWarning, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("إيقاف مؤقت", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = AmberWarning)
+                                }
+                            }
+
+                            OutlinedButton(
+                                onClick = onCancel,
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = CoralError),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, CoralError.copy(alpha = 0.5f)),
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Icon(Icons.Filled.Stop, contentDescription = null, tint = CoralError, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("إلغاء", fontSize = 11.sp, color = CoralError)
+                            }
+                        }
                     }
                 }
             }
@@ -512,11 +575,15 @@ fun GroupDetailsScreen(
     onTabSelect: (Int) -> Unit,
     onBroadcastTextChange: (String) -> Unit,
     onSendBroadcast: () -> Unit,
+    onPauseBroadcast: () -> Unit,
+    onResumeBroadcast: () -> Unit,
+    onCancelBroadcast: () -> Unit,
     onRemoveMember: (Long) -> Unit,
     onOpenAddMember: () -> Unit
 ) {
     val broadcastText = uiState.broadcastTexts[group.id] ?: ""
     val isBroadcasting = uiState.isBroadcastingMap[group.id] == true
+    val isPaused = uiState.isPausedMap[group.id] == true
     val progress = uiState.broadcastingProgress[group.id]
     val estimatedTime = viewModel.calculateEstimatedTime(uiState.selectedGroupMembers.size)
 
@@ -574,12 +641,60 @@ fun GroupDetailsScreen(
         // حقل إدخال الرسالة الممتد داخل التفاصيل
         GlassmorphicCard(modifier = Modifier.fillMaxWidth()) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    text = "إرسال رسالة بث لأعضاء البطاقة:",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = TextPrimary
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "إرسال رسالة بث لأعضاء البطاقة:",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextPrimary
+                    )
+                    Text(
+                        text = "يدعم Spintax والتنويع 🎲",
+                        fontSize = 10.sp,
+                        color = CyberCyan,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                // شريط إدراج المتغيرات والـ Spintax السريعة
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    val variables = listOf(
+                        "{first_name}" to "الاسم الأول",
+                        "{name}" to "الاسم كامل",
+                        "{time_greeting}" to "التحية بالوقت",
+                        "{day_name}" to "اليوم",
+                        "{{أهلاً|مرحباً|حياك الله}}" to "Spintax ترحيب",
+                        "---" to "تبديل القالب"
+                    )
+                    variables.forEach { (tag, label) ->
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0x1825D366))
+                                .clickable {
+                                    onBroadcastTextChange(broadcastText + if (broadcastText.isBlank()) tag else " $tag")
+                                }
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = "+ $label",
+                                color = WhatsAppGreen,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -588,7 +703,7 @@ fun GroupDetailsScreen(
                     OutlinedTextField(
                         value = broadcastText,
                         onValueChange = onBroadcastTextChange,
-                        placeholder = { Text("اكتب الرسالة للبث المباشر...", fontSize = 13.sp) },
+                        placeholder = { Text("اكتب الرسالة (استخدم {{خيار1|خيار2}} و {name} للتنويع)...", fontSize = 12.sp) },
                         modifier = Modifier.weight(1f),
                         minLines = 2,
                         maxLines = 6,
@@ -602,25 +717,132 @@ fun GroupDetailsScreen(
                     )
 
                     GradientButton(
-                        text = if (isBroadcasting) "جاري..." else "إرسال",
+                        text = if (isBroadcasting) (if (isPaused) "موقوف" else "جاري...") else "إرسال",
                         onClick = onSendBroadcast,
                         enabled = broadcastText.isNotBlank() && !isBroadcasting,
                         icon = Icons.Filled.Send
                     )
                 }
 
+                // معاينة حية لعينة من النص المولد عشوائياً
+                if (broadcastText.isNotBlank()) {
+                    val previewSpun = remember(broadcastText) {
+                        com.whatsup.automation.domain.util.SpintaxEngine.process(
+                            template = com.whatsup.automation.domain.util.SpintaxEngine.getTemplateForIndex(broadcastText, 0, 10),
+                            recipientName = "محمد أحمد",
+                            recipientPhone = "+967770000000"
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0x1000E5FF))
+                            .padding(8.dp)
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(
+                                text = "🎲 عينة حية لنص الرسالة كما ستصل للعميل:",
+                                fontSize = 10.sp,
+                                color = CyberCyan,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = previewSpun,
+                                fontSize = 11.sp,
+                                color = TextSecondary,
+                                maxLines = 3,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+
                 if (isBroadcasting && progress != null) {
                     val (sent, total) = progress
                     val fraction = if (total > 0) sent.toFloat() / total.toFloat() else 0f
-                    LinearProgressIndicator(
-                        progress = { fraction },
+                    val percent = (fraction * 100).toInt()
+
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(4.dp)
-                            .clip(RoundedCornerShape(2.dp)),
-                        color = WhatsAppGreen,
-                        trackColor = Color(0x33FFFFFF)
-                    )
+                            .padding(top = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = if (isPaused) "⏸️ الحملة متوقفة مؤقتاً" else "⚡ جارٍ البث الآمن...",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isPaused) AmberWarning else CyberCyan
+                            )
+                            Text(
+                                text = "$sent من $total ($percent%)",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isPaused) AmberWarning else WhatsAppGreenLight
+                            )
+                        }
+
+                        LinearProgressIndicator(
+                            progress = { fraction },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(6.dp)
+                                .clip(RoundedCornerShape(3.dp)),
+                            color = if (isPaused) AmberWarning else WhatsAppGreen,
+                            trackColor = Color(0x33FFFFFF)
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (isPaused) {
+                                Button(
+                                    onClick = onResumeBroadcast,
+                                    colors = ButtonDefaults.buttonColors(containerColor = WhatsAppGreen),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.weight(1f),
+                                    contentPadding = PaddingValues(vertical = 4.dp)
+                                ) {
+                                    Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = DarkBgPrimary, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("استئناف الإرسال", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = DarkBgPrimary)
+                                }
+                            } else {
+                                Button(
+                                    onClick = onPauseBroadcast,
+                                    colors = ButtonDefaults.buttonColors(containerColor = AmberWarning.copy(alpha = 0.2f)),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, AmberWarning),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.weight(1f),
+                                    contentPadding = PaddingValues(vertical = 4.dp)
+                                ) {
+                                    Icon(Icons.Filled.Pause, contentDescription = null, tint = AmberWarning, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("إيقاف مؤقت", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = AmberWarning)
+                                }
+                            }
+
+                            OutlinedButton(
+                                onClick = onCancelBroadcast,
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = CoralError),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, CoralError.copy(alpha = 0.5f)),
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(vertical = 4.dp)
+                            ) {
+                                Icon(Icons.Filled.Stop, contentDescription = null, tint = CoralError, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("إلغاء", fontSize = 11.sp, color = CoralError)
+                            }
+                        }
+                    }
                 }
             }
         }

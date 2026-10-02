@@ -53,6 +53,12 @@ class WhatsAppForegroundService : Service() {
     @Inject
     lateinit var deviceContactsManager: com.whatsup.automation.data.local.contacts.DeviceContactsManager
 
+    @Inject
+    lateinit var antiBanShieldManager: com.whatsup.automation.data.engine.AntiBanShieldManager
+
+    @Inject
+    lateinit var serviceHealthMonitor: ServiceHealthMonitor
+
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var wakeLock: PowerManager.WakeLock? = null
     private var connectivityManager: ConnectivityManager? = null
@@ -114,6 +120,7 @@ class WhatsAppForegroundService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        serviceHealthMonitor.notifyServiceStarted()
         createNotificationChannel()
         acquireWakeLock()
         setupNetworkMonitoring()
@@ -180,6 +187,7 @@ class WhatsAppForegroundService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        serviceHealthMonitor.notifyServiceStopped()
         unregisterNetworkMonitoring()
         releaseWakeLock()
         serviceScope.cancel()
@@ -187,14 +195,22 @@ class WhatsAppForegroundService : Service() {
 
     private fun observeConnectionState() {
         serviceScope.launch {
-            whatsAppEngine.connectionState.collectLatest { state ->
-                val statusText = when (state) {
-                    is ConnectionState.Connected -> "متصل ونشط — الأتمتة تعمل ✅"
-                    is ConnectionState.AwaitingPairing -> "في انتظار الربط (QR أو Pairing Code) ⏳"
-                    is ConnectionState.Reconnecting -> "جارٍ إعادة الاتصال... 🔄"
-                    is ConnectionState.Disconnected -> "غير متصل ⏸️"
-                    is ConnectionState.Error -> "خطأ: ${state.message} ⚠️"
+            kotlinx.coroutines.flow.combine(
+                whatsAppEngine.connectionState,
+                whatsAppEngine.isAutomationPaused
+            ) { state, isPaused ->
+                if (isPaused && state is ConnectionState.Connected) {
+                    "الأتمتة متوقفة مؤقتاً ⏸️ (الجلسة نشطة)"
+                } else {
+                    when (state) {
+                        is ConnectionState.Connected -> "متصل ونشط — الأتمتة تعمل ✅"
+                        is ConnectionState.AwaitingPairing -> "في انتظار الربط (QR أو Pairing Code) ⏳"
+                        is ConnectionState.Reconnecting -> "جارٍ إعادة الاتصال... 🔄"
+                        is ConnectionState.Disconnected -> "غير متصل ⏸️"
+                        is ConnectionState.Error -> "خطأ: ${state.message} ⚠️"
+                    }
                 }
+            }.collectLatest { statusText ->
                 updateNotification(statusText)
             }
         }
@@ -204,6 +220,10 @@ class WhatsAppForegroundService : Service() {
         serviceScope.launch {
             whatsAppEngine.incomingMessages.collect { message ->
                 try {
+                    if (whatsAppEngine.isAutomationPaused.value) {
+                        return@collect
+                    }
+
                     // تجاهل الرسائل الناتجة عن إشعارات أندرويد لمنع التكرار
                     if (message.id.startsWith("NOTIF_")) {
                         return@collect
@@ -238,7 +258,29 @@ class WhatsAppForegroundService : Service() {
                             when (actionResult) {
                                 is ActionResult.ReplySent -> {
                                     if (actionResult.message.isNotBlank()) {
-                                        whatsAppEngine.sendMessage(targetPhone, actionResult.message)
+                                        val shieldResult = antiBanShieldManager.evaluateMessageReply(
+                                            senderPhone = targetPhone,
+                                            incomingText = message.text,
+                                            replyText = actionResult.message
+                                        )
+                                        when (shieldResult) {
+                                            is com.whatsup.automation.data.engine.ShieldCheckResult.Allowed -> {
+                                                whatsAppEngine.sendMessage(
+                                                    recipientPhone = targetPhone,
+                                                    messageText = actionResult.message,
+                                                    typingDelayMs = shieldResult.typingDelayMs,
+                                                    markRead = shieldResult.settings.simulateReading,
+                                                    messageId = message.id,
+                                                    readDelayMs = shieldResult.readDelayMs
+                                                )
+                                            }
+                                            is com.whatsup.automation.data.engine.ShieldCheckResult.Throttled -> {
+                                                whatsAppEngine.logDiagnosticEvent(
+                                                    "SHIELD",
+                                                    "🛡️ تم كتم الرد التلقائي على $targetPhone (${shieldResult.reason})"
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                                 is ActionResult.Error -> {
@@ -258,6 +300,10 @@ class WhatsAppForegroundService : Service() {
         serviceScope.launch {
             whatsAppEngine.incomingStatuses.collect { status ->
                 try {
+                    if (whatsAppEngine.isAutomationPaused.value) {
+                        return@collect
+                    }
+
                     val targetParticipant = status.participant ?: status.senderPhone
                     val targetPhone = status.realPhone ?: status.senderPhone
 
@@ -266,14 +312,18 @@ class WhatsAppForegroundService : Service() {
 
                     val settings = statusRepository.getSettings().first()
 
-                    // المشاهدة التلقائية إذا كانت مفعلة
-                    if (settings.autoViewEnabled && !status.isViewed) {
+                    // التحقق هل صاحب الحالة مسجل في دفتر هاتف الجهاز
+                    val isSenderRegistered = deviceContactsManager.isContactAlreadyRegistered(targetPhone) ||
+                            deviceContactsManager.getContactDisplayName(targetPhone) != null
+
+                    // المشاهدة التلقائية لجهات الاتصال المسجلة فقط
+                    if (settings.autoViewEnabled && !status.isViewed && isSenderRegistered) {
                         whatsAppEngine.markStatusViewed(status.id, targetPhone, targetParticipant)
                         statusRepository.markStatusViewed(status.id)
                     }
 
-                    // التفاعل التلقائي إذا كان مفعلاً
-                    if (settings.autoReactEnabled && !status.isReacted) {
+                    // التفاعل التلقائي لجهات الاتصال المسجلة فقط
+                    if (settings.autoReactEnabled && !status.isReacted && isSenderRegistered) {
                         // تأخير بشري ذكي (1.5 إلى 3 ثوانٍ) لمحاكاة السلوك الطبيعي ومنع حجب التفاعل
                         delay(1500L + (Math.random() * 1200).toLong())
                         val emoji = settings.defaultEmoji.ifBlank { "💚" }

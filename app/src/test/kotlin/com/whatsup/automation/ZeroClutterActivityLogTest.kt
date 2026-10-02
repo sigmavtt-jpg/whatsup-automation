@@ -10,6 +10,8 @@ import com.whatsup.automation.domain.usecase.ProcessIncomingMessageUseCase
 import com.whatsup.automation.domain.usecase.ProcessResult
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Before
@@ -22,6 +24,10 @@ class ZeroClutterActivityLogTest {
     private lateinit var fakeLogRepository: ZeroClutterFakeLogRepository
     private lateinit var matchRuleUseCase: MatchRuleUseCase
     private lateinit var useCase: ProcessIncomingMessageUseCase
+    private lateinit var fakeContactFormattingRepo: com.whatsup.automation.domain.repository.ContactFormattingRepository
+    private lateinit var fakeNotificationRepo: com.whatsup.automation.domain.repository.NotificationRepository
+    private lateinit var mockEngine: com.whatsup.automation.data.engine.WhatsAppEngine
+    private lateinit var memoryManager: com.whatsup.automation.domain.util.ConversationMemoryManager
 
     @Before
     fun setup() {
@@ -29,11 +35,30 @@ class ZeroClutterActivityLogTest {
         fakeRuleRepository = ZeroClutterFakeRuleRepository()
         fakeLogRepository = ZeroClutterFakeLogRepository()
         matchRuleUseCase = MatchRuleUseCase(fakeRuleRepository)
+        fakeContactFormattingRepo = object : com.whatsup.automation.domain.repository.ContactFormattingRepository {
+            override fun getSettings(): Flow<ContactFormattingSettings> = flowOf(ContactFormattingSettings())
+            override suspend fun updateSettings(settings: ContactFormattingSettings) {}
+        }
+        fakeNotificationRepo = object : com.whatsup.automation.domain.repository.NotificationRepository {
+            override val notifications: StateFlow<List<AppNotification>> = MutableStateFlow(emptyList())
+            override val unreadCount: StateFlow<Int> = MutableStateFlow(0)
+            override suspend fun postNotification(title: String, message: String, type: NotificationType) {}
+            override suspend fun markAllAsRead() {}
+            override suspend fun clearAll() {}
+        }
+        mockEngine = org.mockito.kotlin.mock()
+        org.mockito.kotlin.whenever(mockEngine.isAutomationPaused).thenReturn(kotlinx.coroutines.flow.MutableStateFlow(false))
+        memoryManager = com.whatsup.automation.domain.util.ConversationMemoryManager()
+
         useCase = ProcessIncomingMessageUseCase(
             ruleRepository = fakeRuleRepository,
             matchRuleUseCase = matchRuleUseCase,
             logRepository = fakeLogRepository,
-            deviceContactsManager = fakeDeviceContactsManager
+            deviceContactsManager = fakeDeviceContactsManager,
+            contactFormattingRepository = fakeContactFormattingRepo,
+            whatsAppEngine = mockEngine,
+            notificationRepository = fakeNotificationRepo,
+            conversationMemoryManager = memoryManager
         )
     }
 
@@ -123,6 +148,7 @@ class ZeroClutterActivityLogTest {
         val highPriorityRule = Rule(
             id = 1,
             name = "ترحيب VIP",
+            description = "ترحيب VIP",
             patternType = PatternType.CONTAINS,
             patternValue = "مرحبا",
             actions = listOf(RuleAction.SendReply("أهلاً بعميلنا المميز!")),
@@ -132,6 +158,7 @@ class ZeroClutterActivityLogTest {
         val lowPriorityRule = Rule(
             id = 2,
             name = "ترحيب عام",
+            description = "ترحيب عام",
             patternType = PatternType.CONTAINS,
             patternValue = "مرحبا",
             actions = listOf(RuleAction.SendReply("أهلاً بك")),
@@ -200,4 +227,5 @@ class ZeroClutterFakeLogRepository : LogRepository {
     }
     override suspend fun clearAllLogs() { logs.clear() }
     override suspend fun getStats(): DashboardStats = DashboardStats()
+    override suspend fun pruneOldLogs(keepCount: Int): Int = 0
 }

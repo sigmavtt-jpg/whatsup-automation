@@ -320,6 +320,13 @@ export async function startWhatsAppSession(authFolder = currentAuthFolder) {
 
             if (actualSender.startsWith('120363')) continue;
 
+            if (msg.key?.senderPn) {
+                linkLidAndPhone(actualSender, msg.key.senderPn, msg.pushName, authFolder);
+            }
+            if (msg.key?.participantPn) {
+                linkLidAndPhone(actualSender, msg.key.participantPn, msg.pushName, authFolder);
+            }
+
             const resolved = await resolvePhoneAndLid(actualSender, msg, sock);
             const cleanPhone = resolved.realPhone || resolved.phone;
             if (!cleanPhone || cleanPhone.startsWith('120363')) continue;

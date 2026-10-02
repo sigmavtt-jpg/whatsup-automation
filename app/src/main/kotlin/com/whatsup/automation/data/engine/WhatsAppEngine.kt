@@ -60,6 +60,20 @@ class WhatsAppEngine @Inject constructor(
     private val _incomingStatuses = MutableSharedFlow<StatusStory>(extraBufferCapacity = 64)
     val incomingStatuses: SharedFlow<StatusStory> = _incomingStatuses.asSharedFlow()
 
+    private val enginePrefs = context.getSharedPreferences("whatsup_engine_prefs", Context.MODE_PRIVATE)
+    private val _isAutomationPaused = MutableStateFlow(enginePrefs.getBoolean("automation_paused", false))
+    val isAutomationPaused: StateFlow<Boolean> = _isAutomationPaused.asStateFlow()
+
+    fun setAutomationPaused(paused: Boolean) {
+        enginePrefs.edit().putBoolean("automation_paused", paused).apply()
+        _isAutomationPaused.value = paused
+        logDiagnosticEvent("ENGINE", if (paused) "⏸️ تم تجميد الأتمتة مؤقتاً (كتم الردود والحفظ مع بقاء الاتصال آمناً)." else "▶️ تم استئناف الأتمتة والردود بنجاح.")
+    }
+
+    fun toggleAutomationPause() {
+        setAutomationPaused(!_isAutomationPaused.value)
+    }
+
     private val _engineDiagnostics = MutableStateFlow<List<String>>(
         listOf("[${java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())}][SYSTEM] Engine initialized successfully.")
     )
@@ -69,7 +83,7 @@ class WhatsAppEngine @Inject constructor(
         val timestamp = java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.getDefault()).format(java.util.Date())
         val entry = "[$timestamp][$tag] $message"
         _engineDiagnostics.update { current ->
-            (current + entry).takeLast(150)
+            (current + entry).takeLast(100)
         }
     }
 
@@ -303,17 +317,38 @@ class WhatsAppEngine @Inject constructor(
     }
 
     /**
-     * إرسال رسالة نصية عبر مقبس واتساب الحقيقي.
+     * إرسال رسالة نصية عبر مقبس واتساب الحقيقي مع دعم محاكي السلوك البشري.
      */
-    suspend fun sendMessage(recipientPhone: String, messageText: String): Boolean {
+    suspend fun sendMessage(
+        recipientPhone: String,
+        messageText: String,
+        typingDelayMs: Long? = null,
+        markRead: Boolean = false,
+        messageId: String? = null,
+        readDelayMs: Long? = null
+    ): Boolean {
         // لا نمنع الإرسال بناءً على حالة الاتصال المحلية فقط — الجسر يتعامل مع الانتظار داخلياً
         val cleanPhone = recipientPhone.filter { it.isDigit() }
         if (cleanPhone.length < 7) {
             logDiagnosticEvent("SEND", "Invalid phone number: $recipientPhone")
             return false
         }
-        logDiagnosticEvent("SEND", "Sending message to $cleanPhone (${messageText.take(20)}...)")
-        return baileysBridgeManager.sendMessage(cleanPhone, messageText)
+        logDiagnosticEvent("SEND", "Sending message to $cleanPhone (${messageText.take(20)}...) [TypingDelay: ${typingDelayMs ?: "default"}ms, MarkRead: $markRead]")
+        return baileysBridgeManager.sendMessage(
+            recipient = cleanPhone,
+            text = messageText,
+            typingDelayMs = typingDelayMs,
+            markRead = markRead,
+            messageId = messageId,
+            readDelayMs = readDelayMs
+        )
+    }
+
+    /**
+     * إرسال تأكيد قراءة رسالة محددة.
+     */
+    suspend fun markMessageRead(chatJid: String, messageId: String, participant: String? = null): Boolean {
+        return baileysBridgeManager.markMessageRead(chatJid, messageId, participant)
     }
 
     /**
@@ -449,11 +484,11 @@ class WhatsAppEngine @Inject constructor(
                 }
                 "INCOMING_MESSAGE" -> {
                     val id = data.optString("id", UUID.randomUUID().toString())
-                    val senderPhone = data.optString("senderPhone")
-                    val realPhone = data.optString("realPhone").takeIf { it.isNotEmpty() }
-                    val lid = data.optString("lid").takeIf { it.isNotEmpty() }
+                    val senderPhone = data.optString("senderPhone").takeIf { it.isNotBlank() && it != "null" } ?: ""
+                    val realPhone = data.optString("realPhone").takeIf { it.isNotBlank() && it != "null" }
+                    val lid = data.optString("lid").takeIf { it.isNotBlank() && it != "null" }
                     val isLid = data.optBoolean("isLid", false)
-                    val rawSenderName = data.optString("senderName", "")
+                    val rawSenderName = data.optString("senderName", "").takeIf { it != "null" } ?: ""
                     val text = data.optString("text")
                     val isGroup = data.optBoolean("isGroup", false)
                     val ts = data.optLong("timestamp", System.currentTimeMillis())
@@ -490,14 +525,14 @@ class WhatsAppEngine @Inject constructor(
                 }
                 "INCOMING_STATUS", "STATUS_RECEIVED" -> {
                     val id = data.optString("id", UUID.randomUUID().toString())
-                    val senderPhone = data.optString("senderPhone")
-                    val participant = data.optString("participant").takeIf { it.isNotEmpty() }
-                    val realPhone = data.optString("realPhone").takeIf { it.isNotEmpty() }
-                    val lid = data.optString("lid").takeIf { it.isNotEmpty() }
+                    val senderPhone = data.optString("senderPhone").takeIf { it.isNotBlank() && it != "null" } ?: ""
+                    val participant = data.optString("participant").takeIf { it.isNotBlank() && it != "null" }
+                    val realPhone = data.optString("realPhone").takeIf { it.isNotBlank() && it != "null" }
+                    val lid = data.optString("lid").takeIf { it.isNotBlank() && it != "null" }
                     val isLid = data.optBoolean("isLid", false)
-                    val rawSenderName = data.optString("senderName", "")
+                    val rawSenderName = data.optString("senderName", "").takeIf { it != "null" } ?: ""
                     val mediaTypeStr = data.optString("mediaType", "TEXT")
-                    val textContent = data.optString("textContent").takeIf { it.isNotEmpty() }
+                    val textContent = data.optString("textContent").takeIf { it.isNotEmpty() && it != "null" }
                     val ts = data.optLong("timestamp", System.currentTimeMillis())
 
                     val effectivePhone = realPhone ?: senderPhone

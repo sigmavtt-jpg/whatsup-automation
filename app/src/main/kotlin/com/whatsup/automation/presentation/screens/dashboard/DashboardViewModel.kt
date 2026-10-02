@@ -19,6 +19,7 @@ import javax.inject.Inject
 data class DashboardUiState(
     val connectionState: ConnectionState = ConnectionState.Disconnected,
     val isAssistantActive: Boolean = false,
+    val isAutomationPaused: Boolean = false,
     val stats: DashboardStats = DashboardStats(),
     val recentLogs: List<ActivityLog> = emptyList(),
     val isRefreshing: Boolean = false,
@@ -36,21 +37,48 @@ class DashboardViewModel @Inject constructor(
     private val whatsAppEngine: WhatsAppEngine,
     private val logRepository: LogRepository,
     private val syncedContactDao: SyncedContactDao,
-    private val deviceContactsManager: com.whatsup.automation.data.local.contacts.DeviceContactsManager
+    private val deviceContactsManager: com.whatsup.automation.data.local.contacts.DeviceContactsManager,
+    private val notificationRepository: com.whatsup.automation.domain.repository.NotificationRepository,
+    private val serviceHealthMonitor: com.whatsup.automation.service.ServiceHealthMonitor
 ) : ViewModel() {
+
+    val healthState = serviceHealthMonitor.healthState
+    val notifications: StateFlow<List<com.whatsup.automation.domain.model.AppNotification>> = notificationRepository.notifications
+    val unreadNotificationsCount: StateFlow<Int> = notificationRepository.unreadCount
 
     private val _uiState = MutableStateFlow(DashboardUiState())
     val uiState: StateFlow<DashboardUiState> = _uiState.asStateFlow()
+
+    fun markNotificationsAsRead() {
+        viewModelScope.launch {
+            notificationRepository.markAllAsRead()
+        }
+    }
+
+    fun clearNotifications() {
+        viewModelScope.launch {
+            notificationRepository.clearAll()
+        }
+    }
 
     init {
         checkPermissions()
         observeConnectionState()
         observeAssistantState()
+        observeAutomationPauseState()
         observeContacts()
         observeLogs()
         observeEngineDiagnostics()
         refreshStats()
         startAutoRefresh()
+    }
+
+    private fun observeAutomationPauseState() {
+        viewModelScope.launch {
+            whatsAppEngine.isAutomationPaused.collect { isPaused ->
+                _uiState.update { it.copy(isAutomationPaused = isPaused) }
+            }
+        }
     }
 
     private fun startAutoRefresh() {
@@ -165,7 +193,7 @@ class DashboardViewModel @Inject constructor(
 
     fun toggleService() {
         if (_uiState.value.connectionState is ConnectionState.Connected) {
-            whatsAppEngine.stopEngine()
+            whatsAppEngine.toggleAutomationPause()
         } else {
             whatsAppEngine.startEngine()
         }
